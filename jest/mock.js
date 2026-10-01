@@ -31,6 +31,8 @@ const permissions = () => ({
   fullScreenIntent: 'granted',
   exactAlarm: 'granted',
   batteryOptimization: 'granted',
+  batteryUsage: 'optimized',
+  backgroundRestricted: false,
   autoStart: 'not_applicable',
   oemHasAutoStartManager: false,
   timeSensitive: 'not_applicable',

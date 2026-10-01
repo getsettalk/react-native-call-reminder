@@ -39,6 +39,19 @@ internal enum class Label(val key: String, val resId: Int) {
   END_CALL("endCall", R.string.callreminder_label_end_call),
   REPLAY("replay", R.string.callreminder_label_replay),
   TAP_TO_ANSWER("tapToAnswer", R.string.callreminder_label_tap_to_answer),
+  SWIPE_TO_ANSWER("swipeToAnswer", R.string.callreminder_label_swipe_to_answer),
+  SWIPE_TO_DECLINE("swipeToDecline", R.string.callreminder_label_swipe_to_decline),
+}
+
+/** `configure({ answerGesture })`: how the ringing call screen is answered/declined. */
+internal enum class AnswerGesture(val key: String) {
+  /** Drag the button upwards; a plain tap only nudges it (no pocket answers). */
+  SWIPE("swipe"),
+  TAP("tap");
+
+  companion object {
+    fun from(key: String?) = entries.firstOrNull { it.key == key } ?: SWIPE
+  }
 }
 
 /**
@@ -59,6 +72,7 @@ internal class CallReminderConfig private constructor(private val json: JSONObje
   val defaultActions: List<CallAction> = CallAction.listFrom(json.optJSONArray("defaultActions"))
   val ringUsage: RingUsage = RingUsage.from(json.optStringOrNull("ringAudioUsage"))
   val speechUsage: SpeechUsage = SpeechUsage.from(json.optStringOrNull("speechAudioUsage"))
+  val answerGesture: AnswerGesture = AnswerGesture.from(json.optStringOrNull("answerGesture"))
   val duplicateWindowMs: Long =
       json.optDouble("duplicateWindowSeconds", DEFAULT_DUPLICATE_WINDOW_S).toLong().coerceIn(0, 86_400) * 1000
   val idleTimeoutMs: Long =

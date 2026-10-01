@@ -85,7 +85,14 @@ export async function openExactAlarmSettings(): Promise<PermissionState> {
   return toPermissionState(await NativeCallReminder.openExactAlarmSettings());
 }
 
-/** Android: battery-optimisation list; resolves with the state on return. */
+/**
+ * Android: opens the most specific page where the user can change this app's
+ * battery usage (the app's *Battery* page where the device has one, else the
+ * app's details page, else the battery-optimisation list) and resolves with
+ * the re-checked `batteryOptimization` state on return: `denied` only while
+ * the app is background-restricted. Resolves at once, without opening
+ * anything, when the app is already `unrestricted`. iOS: `not_applicable`.
+ */
 export async function openBatteryOptimizationSettings(): Promise<PermissionState> {
   return toPermissionState(await NativeCallReminder.openBatteryOptimizationSettings());
 }

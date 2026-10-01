@@ -36,11 +36,19 @@ final class CallScreenViewController: UIViewController {
   private let ringingControls = UIStackView()
   private let activeControls = UIStackView()
   private var answerButton: UIButton?
+  /// `answerGesture: 'swipe'`: the ringing buttons are dragged upwards.
+  private let swipeGroup = SwipeUpControl.Group()
+  private var swipeControls: [SwipeUpControl] = []
+  private var ringing = false
 
   private static let avatarSize: CGFloat = 104
   private static let pulseSize: CGFloat = 168
   private static let endedLinger: TimeInterval = 1.2
   private static let minHeightForAvatar: CGFloat = 560
+  /// Peak size of the Answer circle's breathing nudge (×).
+  private static let nudgeScale: CGFloat = 1.1
+  /// Resting opacity of the "Swipe up to …" hints.
+  private static let swipeHintAlpha: CGFloat = 0.6
 
   init(core: CallReminderCore, config: CallReminderConfig) {
     self.core = core
@@ -172,6 +180,8 @@ final class CallScreenViewController: UIViewController {
     headerLabel.text = config.label(.incomingTitle)
     setControlsEnabled(true)
     stopTimer()
+    if !ringing { swipeGroup.reset() }
+    ringing = true
     startRingingAnimations()
   }
 
@@ -317,15 +327,44 @@ final class CallScreenViewController: UIViewController {
     spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
     spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-    let decline = roundButton(
-      symbol: "phone.down.fill", color: CallReminderConfig.declineColor, label: config.label(.decline), size: 72,
-      action: #selector(declineTapped))
-    let answer = roundButton(
-      symbol: "phone.fill", color: CallReminderConfig.answerColor, label: config.label(.answer), size: 72,
-      action: #selector(answerTapped))
+    let decline: (column: UIView, button: UIButton)
+    let answer: (column: UIView, button: UIButton)
+    if config.answerBySwipe {
+      swipeGroup.onBusyChanged = { [weak self] busy in
+        guard let self else { return }
+        // The circle must stay under the finger while a ringing button is touched.
+        if busy {
+          self.stopBreathing()
+          self.swipeGroup.invite(false)
+        } else if self.ringing {
+          self.startBreathing()
+          self.swipeGroup.invite(true)
+        }
+      }
+      decline = swipeButton(
+        symbol: "phone.down.fill", color: CallReminderConfig.declineColor, label: config.label(.decline),
+        hint: config.label(.swipeToDecline)
+      ) { [weak self] in self?.declineTapped() }
+      answer = swipeButton(
+        symbol: "phone.fill", color: CallReminderConfig.answerColor, label: config.label(.answer),
+        hint: config.label(.swipeToAnswer)
+      ) { [weak self] in self?.answerTapped() }
+    } else {
+      decline = roundButton(
+        symbol: "phone.down.fill", color: CallReminderConfig.declineColor, label: config.label(.decline), size: 72,
+        action: #selector(declineTapped))
+      answer = roundButton(
+        symbol: "phone.fill", color: CallReminderConfig.answerColor, label: config.label(.answer), size: 72,
+        action: #selector(answerTapped))
+    }
     answerButton = answer.button
     ringingControls.axis = .horizontal
     ringingControls.distribution = .fillEqually
+    if config.answerBySwipe {
+      // Natural-height columns, top-aligned: the circles stay level even when
+      // one hint wraps to two lines.
+      ringingControls.alignment = .top
+    }
     ringingControls.addArrangedSubview(decline.column)
     ringingControls.addArrangedSubview(answer.column)
 
@@ -350,19 +389,8 @@ final class CallScreenViewController: UIViewController {
     symbol: String, color: UIColor, label: String, size: CGFloat, action: Selector
   ) -> (column: UIView, button: UIButton) {
     let button = UIButton(type: .system)
-    button.backgroundColor = color
-    button.layer.cornerRadius = size / 2
-    button.tintColor = contrast(on: color)
-    button.setImage(
-      UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size * 0.36, weight: .semibold)),
-      for: .normal)
-    button.accessibilityLabel = label
+    styleCircle(button, symbol: symbol, color: color, label: label, size: size)
     button.addTarget(self, action: action, for: .touchUpInside)
-    button.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      button.widthAnchor.constraint(equalToConstant: size),
-      button.heightAnchor.constraint(equalToConstant: size),
-    ])
     let caption = UILabel()
     style(caption, .footnote, alpha: 0.9)
     caption.text = label
@@ -372,6 +400,75 @@ final class CallScreenViewController: UIViewController {
     column.alignment = .center
     column.spacing = 8
     return (column, button)
+  }
+
+  /**
+   * Answer/Decline while ringing with `answerGesture: 'swipe'`: the circle is
+   * dragged upwards (see `SwipeUpControl`), as the chevrons above it and the
+   * hint below say. A tap only nudges it; VoiceOver/Switch Control activation
+   * and the "Answer"/"Decline" custom actions commit directly.
+   */
+  private func swipeButton(
+    symbol: String, color: UIColor, label: String, hint hintText: String, commit: @escaping () -> Void
+  ) -> (column: UIView, button: UIButton) {
+    let button = RingingCallButton(type: .system)
+    styleCircle(button, symbol: symbol, color: color, label: label, size: 72)
+    let chevron = chevronView()
+    chevron.setContentHuggingPriority(.required, for: .vertical)
+    let caption = UILabel()
+    style(caption, .footnote, alpha: 0.9)
+    caption.text = label
+    caption.isAccessibilityElement = false
+    let hint = UILabel()
+    // Full-strength text faded with the view's alpha, which the gesture animates.
+    style(hint, .caption1, lines: 2)
+    hint.alpha = Self.swipeHintAlpha
+    hint.text = hintText
+    hint.isAccessibilityElement = false
+    let column = UIStackView(arrangedSubviews: [chevron, button, caption, hint])
+    column.axis = .vertical
+    column.alignment = .center
+    column.spacing = 8
+    column.setCustomSpacing(6, after: chevron)
+    column.setCustomSpacing(2, after: caption)
+    hint.widthAnchor.constraint(lessThanOrEqualTo: column.widthAnchor, constant: -8).isActive = true
+    swipeControls.append(
+      SwipeUpControl(
+        button: button, chevron: chevron, hint: hint, group: swipeGroup, hintAlpha: Self.swipeHintAlpha,
+        label: label, onCommit: commit))
+    return (column, button)
+  }
+
+  /// Two stacked upward chevrons: the "swipe up" hint above a ringing button.
+  private func chevronView() -> UIView {
+    let symbol = UIImage(
+      systemName: "chevron.up", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .bold))
+    let top = UIImageView(image: symbol)
+    let bottom = UIImageView(image: symbol)
+    bottom.alpha = 0.5
+    let stack = UIStackView(arrangedSubviews: [top, bottom])
+    stack.axis = .vertical
+    stack.alignment = .center
+    stack.spacing = -4
+    stack.tintColor = config.textColor
+    stack.isAccessibilityElement = false
+    stack.accessibilityElementsHidden = true
+    return stack
+  }
+
+  private func styleCircle(_ button: UIButton, symbol: String, color: UIColor, label: String, size: CGFloat) {
+    button.backgroundColor = color
+    button.layer.cornerRadius = size / 2
+    button.tintColor = contrast(on: color)
+    button.setImage(
+      UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size * 0.36, weight: .semibold)),
+      for: .normal)
+    button.accessibilityLabel = label
+    button.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      button.widthAnchor.constraint(equalToConstant: size),
+      button.heightAnchor.constraint(equalToConstant: size),
+    ])
   }
 
   private func bindActions(_ actions: [CallAction]) {
@@ -473,21 +570,37 @@ final class CallScreenViewController: UIViewController {
       group.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + Double(index) * 0.8
       layer.add(group, forKey: "pulse")
     }
-    if let answerButton, answerButton.layer.animation(forKey: "nudge") == nil {
-      let nudge = CABasicAnimation(keyPath: "transform.translation.y")
-      nudge.fromValue = 0
-      nudge.toValue = -10
-      nudge.duration = 0.45
-      nudge.autoreverses = true
-      nudge.repeatCount = .infinity
-      nudge.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-      answerButton.layer.add(nudge, forKey: "nudge")
-    }
+    startBreathing()
+    if config.answerBySwipe { swipeGroup.invite(true) }
+  }
+
+  /// The Answer circle "breathes" in place (grow, settle, rest) — scaled about
+  /// its own centre so it stays level with Decline. Paused while a ringing
+  /// button is touched, so the circle stays under the finger.
+  private func startBreathing() {
+    guard !UIAccessibility.isReduceMotionEnabled, let answerButton,
+          answerButton.layer.animation(forKey: "nudge") == nil
+    else { return }
+    let breathe = CAKeyframeAnimation(keyPath: "transform.scale")
+    breathe.values = [1, Self.nudgeScale, 1, 1]
+    breathe.keyTimes = [0, 0.33, 0.66, 1]
+    breathe.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: 3)
+    breathe.duration = 1.2
+    breathe.repeatCount = .infinity
+    breathe.beginTime = answerButton.layer.convertTime(CACurrentMediaTime(), from: nil) + 0.4
+    answerButton.layer.add(breathe, forKey: "nudge")
+  }
+
+  private func stopBreathing() {
+    answerButton?.layer.removeAnimation(forKey: "nudge")
   }
 
   private func stopRingingAnimations() {
+    ringing = false
     pulseLayers.forEach { $0.removeAnimation(forKey: "pulse") }
-    answerButton?.layer.removeAnimation(forKey: "nudge")
+    stopBreathing()
+    // Abandons a drag in progress (answered from the notification, timed out, …).
+    swipeGroup.reset()
   }
 
   // MARK: - Helpers
@@ -546,5 +659,337 @@ final class CallScreenViewController: UIViewController {
     guard alpha > 0.5 else { return config.textColor }
     let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
     return luminance > 0.6 ? .black : .white
+  }
+}
+
+// MARK: - Swipe to answer / decline
+
+/// A ringing Answer/Decline circle. VoiceOver and Switch Control users cannot
+/// drag, so activating the element (double-tap) commits directly.
+private final class RingingCallButton: UIButton {
+  var onAccessibilityActivate: (() -> Void)?
+
+  override func accessibilityActivate() -> Bool {
+    guard let onAccessibilityActivate else { return super.accessibilityActivate() }
+    onAccessibilityActivate()
+    return true
+  }
+}
+
+/**
+ * "Swipe up to answer / decline" for one ringing button: the circle follows
+ * the finger 1:1 up to the commit point, then with increasing resistance, and
+ * commits when released past `commitFraction` of the drag distance (or on a
+ * fast upward fling); otherwise it springs back. Past the commit point it grows
+ * slightly (with a selection tick) so the user knows letting go will act. While
+ * idle, the chevron above it floats upwards to invite the gesture. A plain tap never commits (no pocket answers) — it bounces
+ * the circle and emphasises the hint instead. Accessibility activation and the
+ * custom action commit directly. Buttons of one `Group` are exclusive: while
+ * one is dragged the others do not start, and only one finger is tracked.
+ */
+private final class SwipeUpControl: NSObject, UIGestureRecognizerDelegate {
+  /// Shared by the buttons of one screen: at most one is dragged at a time.
+  final class Group {
+    var members: [SwipeUpControl] = []
+    weak var owner: SwipeUpControl?
+    /// True while any member is dragged or settling (e.g. to pause the breathing animation).
+    var onBusyChanged: ((Bool) -> Void)?
+    private var busy = false
+
+    func updateBusy() {
+      let now = owner != nil || members.contains { $0.settling }
+      guard now != busy else { return }
+      busy = now
+      onBusyChanged?(now)
+    }
+
+    /// Puts every member back at rest, abandoning any drag (e.g. the call stopped ringing).
+    func reset() {
+      owner = nil
+      members.forEach { $0.resetToRest() }
+      updateBusy()
+    }
+
+    /// Starts or stops the chevrons' idle "float up" cue on every member.
+    func invite(_ on: Bool) {
+      members.forEach { on ? $0.startInvite() : $0.stopInvite() }
+    }
+  }
+
+  private static let maxDistance: CGFloat = 140
+  private static let minDistance: CGFloat = 90
+  private static let commitFraction: CGFloat = 0.4
+  private static let flingVelocity: CGFloat = 1000
+  private static let flingMinTravel: CGFloat = 24
+  private static let hop: CGFloat = 26
+  private static let armedScale: CGFloat = 1.12
+  private static let inviteRise: CGFloat = 8
+
+  let button: RingingCallButton
+  private let chevron: UIView
+  private let hint: UIView
+  private weak var group: Group?
+  private let hintAlpha: CGFloat
+  private let onCommit: () -> Void
+  private let pan = UIPanGestureRecognizer()
+  private(set) var settling = false
+  private var settleToken = 0
+  private var emphasisToken = 0
+  private var armed = false
+  private var distance = SwipeUpControl.maxDistance
+  private var selection: UISelectionFeedbackGenerator?
+
+  init(
+    button: RingingCallButton, chevron: UIView, hint: UIView, group: Group, hintAlpha: CGFloat, label: String,
+    onCommit: @escaping () -> Void
+  ) {
+    self.button = button
+    self.chevron = chevron
+    self.hint = hint
+    self.group = group
+    self.hintAlpha = hintAlpha
+    self.onCommit = onCommit
+    super.init()
+    group.members.append(self)
+    pan.addTarget(self, action: #selector(handlePan(_:)))
+    pan.maximumNumberOfTouches = 1
+    pan.delegate = self
+    button.addGestureRecognizer(pan)
+    // One finger on one button: no second simultaneous touch anywhere else.
+    button.isExclusiveTouch = true
+    button.addTarget(self, action: #selector(tapped), for: .touchUpInside)
+    button.onAccessibilityActivate = { [weak self] in self?.commit() }
+    button.accessibilityCustomActions = [
+      UIAccessibilityCustomAction(name: label) { [weak self] _ in
+        self?.commit()
+        return true
+      },
+    ]
+  }
+
+  /// Commits as if dragged: haptic confirmation, then `onCommit`; the circle settles back.
+  func commit() {
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    onCommit()
+    // The screen normally switches state right away; if the call keeps ringing
+    // it is back at rest.
+    springBack()
+  }
+
+  func resetToRest() {
+    settleToken += 1
+    emphasisToken += 1
+    settling = false
+    armed = false
+    selection = nil
+    [button, chevron, hint].forEach { $0.layer.removeAllAnimations() }
+    button.transform = .identity
+    button.alpha = 1
+    chevron.transform = .identity
+    chevron.alpha = 1
+    hint.transform = .identity
+    hint.alpha = hintAlpha
+  }
+
+  // MARK: Gesture
+
+  func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    guard gestureRecognizer === pan else { return true }
+    if let owner = group?.owner, owner !== self { return false }
+    // Upward only; a sideways or downward move stays a (non-committing) touch.
+    let translation = pan.translation(in: button.superview)
+    return translation.y < 0 && abs(translation.y) >= abs(translation.x)
+  }
+
+  @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+    let pulled = max(0, -recognizer.translation(in: button.superview).y)
+    switch recognizer.state {
+    case .began:
+      group?.owner = self
+      settleToken += 1
+      settling = false
+      calmHint()
+      // Freeze any in-flight settle animation where it is.
+      button.layer.removeAllAnimations()
+      armed = false
+      let height = button.window?.bounds.height ?? 0
+      distance = height > 0 ? min(Self.maxDistance, max(Self.minDistance, height / 4)) : Self.maxDistance
+      selection = UISelectionFeedbackGenerator()
+      selection?.prepare()
+      group?.updateBusy()
+      follow(pulled)
+    case .changed:
+      guard group?.owner === self else { return }
+      follow(pulled)
+    case .ended:
+      guard group?.owner === self else { return }
+      let velocity = recognizer.velocity(in: button.superview).y
+      finish(
+        commit: pulled >= distance * Self.commitFraction
+          || (velocity <= -Self.flingVelocity && pulled >= Self.flingMinTravel))
+    case .cancelled, .failed:
+      guard group?.owner === self else { return }
+      finish(commit: false)
+    default:
+      break
+    }
+  }
+
+  /// 1:1 up to the commit point, then a rubber band approaching `distance` asymptotically.
+  private func follow(_ pulled: CGFloat) {
+    let commitAt = distance * Self.commitFraction
+    let slack = distance - commitAt
+    let shown = pulled <= commitAt ? pulled : commitAt + slack * (1 - exp(-(pulled - commitAt) / slack))
+    let scale = armed ? Self.armedScale : 1
+    button.transform = CGAffineTransform(translationX: 0, y: -shown).scaledBy(x: scale, y: scale)
+    let progress = min(1, pulled / (distance * Self.commitFraction))
+    chevron.alpha = 1 - progress
+    hint.alpha = hintAlpha * (1 - 0.5 * progress)
+    group?.members.forEach { if $0 !== self { $0.button.alpha = 1 - 0.5 * progress } }
+    let nowArmed = pulled >= distance * Self.commitFraction
+    if nowArmed != armed {
+      armed = nowArmed
+      if nowArmed {
+        selection?.selectionChanged()
+        selection?.prepare()
+      }
+      let scale = nowArmed ? Self.armedScale : 1
+      UIView.animate(
+        withDuration: 0.14, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+        animations: {
+          self.button.transform = CGAffineTransform(translationX: 0, y: -shown).scaledBy(x: scale, y: scale)
+        })
+    }
+  }
+
+  private func finish(commit shouldCommit: Bool) {
+    group?.owner = nil
+    armed = false
+    selection = nil
+    if shouldCommit {
+      commit()
+    } else {
+      springBack()
+    }
+    group?.updateBusy()
+  }
+
+  /// A plain tap: bounce and point at the hint. Under VoiceOver / Switch Control
+  /// a tap that reaches us is an activation, so it commits.
+  @objc private func tapped() {
+    if UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning {
+      commit()
+      return
+    }
+    bounce()
+  }
+
+  // MARK: Animations
+
+  private func springBack() {
+    settleToken += 1
+    let token = settleToken
+    settling = true
+    let others = group?.members.filter { $0 !== self } ?? []
+    UIView.animate(
+      withDuration: 0.45, delay: 0, usingSpringWithDamping: UIAccessibility.isReduceMotionEnabled ? 1 : 0.62,
+      initialSpringVelocity: 0,
+      options: [.allowUserInteraction, .beginFromCurrentState],
+      animations: {
+        self.button.transform = .identity
+        self.chevron.alpha = 1
+        self.hint.alpha = self.hintAlpha
+        others.forEach { $0.button.alpha = 1 }
+      },
+      completion: { [weak self] _ in self?.settled(token) })
+  }
+
+  private func bounce() {
+    settleToken += 1
+    let token = settleToken
+    settling = true
+    group?.updateBusy()
+    emphasizeHint()
+    guard !UIAccessibility.isReduceMotionEnabled else {
+      settled(token)
+      return
+    }
+    UIView.animateKeyframes(
+      withDuration: 0.7, delay: 0, options: [.allowUserInteraction, .calculationModeCubic],
+      animations: {
+        UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.3) {
+          self.button.transform = CGAffineTransform(translationX: 0, y: -Self.hop)
+        }
+        UIView.addKeyframe(withRelativeStartTime: 0.3, relativeDuration: 0.3) {
+          self.button.transform = .identity
+        }
+        UIView.addKeyframe(withRelativeStartTime: 0.6, relativeDuration: 0.2) {
+          self.button.transform = CGAffineTransform(translationX: 0, y: -Self.hop * 0.35)
+        }
+        UIView.addKeyframe(withRelativeStartTime: 0.8, relativeDuration: 0.2) {
+          self.button.transform = .identity
+        }
+      },
+      completion: { [weak self] _ in self?.settled(token) })
+  }
+
+  private func settled(_ token: Int) {
+    // A newer touch or animation took over.
+    guard token == settleToken else { return }
+    settling = false
+    group?.updateBusy()
+  }
+
+  private func emphasizeHint() {
+    emphasisToken += 1
+    let token = emphasisToken
+    let reduceMotion = UIAccessibility.isReduceMotionEnabled
+    UIView.animate(
+      withDuration: 0.18, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState],
+      animations: {
+        self.hint.alpha = 1
+        if !reduceMotion {
+          self.hint.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+        }
+      },
+      completion: { [weak self] _ in
+        guard let self, token == self.emphasisToken else { return }
+        UIView.animate(
+          withDuration: 0.32, delay: 1.4, options: [.allowUserInteraction, .beginFromCurrentState],
+          animations: {
+            self.hint.alpha = self.hintAlpha
+            self.hint.transform = .identity
+          })
+      })
+  }
+
+  private func calmHint() {
+    emphasisToken += 1
+    hint.layer.removeAllAnimations()
+    chevron.layer.removeAllAnimations()
+    hint.transform = .identity
+    hint.alpha = hintAlpha
+    chevron.transform = .identity
+  }
+
+  /// Floats the chevron up while fading it, then rests — repeated until touched or stopped.
+  /// A layer animation: it goes away with the view, nothing to tear down.
+  func startInvite() {
+    guard !UIAccessibility.isReduceMotionEnabled, chevron.layer.animation(forKey: "invite") == nil else { return }
+    let rise = CAKeyframeAnimation(keyPath: "transform.translation.y")
+    rise.values = [0, -Self.inviteRise * 0.6, -Self.inviteRise]
+    let fade = CAKeyframeAnimation(keyPath: "opacity")
+    fade.values = [1, 1, 0]
+    let invite = CAAnimationGroup()
+    invite.animations = [rise, fade]
+    invite.duration = 1.1
+    invite.repeatCount = .infinity
+    invite.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    invite.beginTime = chevron.layer.convertTime(CACurrentMediaTime(), from: nil) + 0.3
+    chevron.layer.add(invite, forKey: "invite")
+  }
+
+  func stopInvite() {
+    chevron.layer.removeAnimation(forKey: "invite")
   }
 }

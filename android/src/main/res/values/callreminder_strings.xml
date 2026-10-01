@@ -14,5 +14,7 @@
   <string name="callreminder_label_end_call">End call</string>
   <string name="callreminder_label_replay">Repeat</string>
   <string name="callreminder_label_tap_to_answer">Tap Answer to listen</string>
+  <string name="callreminder_label_swipe_to_answer">Swipe up to answer</string>
+  <string name="callreminder_label_swipe_to_decline">Swipe up to decline</string>
   <string name="callreminder_a11y_call_duration">Call duration %1$s</string>
 </resources>

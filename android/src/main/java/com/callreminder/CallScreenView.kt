@@ -37,6 +37,8 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
+import kotlin.math.max
 
 /**
  * The call screen, built in code so the library imposes no theme or layout
@@ -114,20 +116,30 @@ internal class CallScreenView(
         gravity = Gravity.CENTER_HORIZONTAL
       }
 
-  /** Lets the Answer button's breathing circle draw past the row's edges instead of being clipped. */
+  /**
+   * Lets the Answer button's breathing circle and a dragged circle draw past
+   * the row's edges instead of being clipped. One finger at a time: a second
+   * pointer stays with the button the first one touched (which ignores it).
+   */
   private val ringingControls =
       LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         clipChildren = false
+        clipToPadding = false
+        isMotionEventSplittingEnabled = false
       }
   private val activeControls = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-  private val answerButton: View
-  private val declineButton: View
+  private val swipeToAnswer = config.answerGesture == AnswerGesture.SWIPE
+  /** While a ringing button is touched or settling the Answer circle stops breathing. */
+  private val swipeGroup = SwipeUpButton.Group { busy -> if (busy) stopBreathing() else if (ringing) startBreathing() }
+  private val answerButton: RingingButton
+  private val declineButton: RingingButton
   /** The Answer button's circle (without its label): what the ringing nudge animates. */
   private val answerCircle: View
 
   private var pulse: Animator? = null
   private var nudge: Animator? = null
+  private var ringing = false
   private var boundCallId: String? = null
   private var boundActions: List<CallAction>? = null
   /** Call details are hidden (private call on a secure lock screen). */
@@ -137,9 +149,17 @@ internal class CallScreenView(
   init {
     root.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     content.setPadding(dp(24), dp(16), dp(24), dp(24))
+    // A dragged (or breathing) circle may draw past its row into the area above.
+    content.clipChildren = false
+    content.clipToPadding = false
+    root.clipChildren = false
+    root.clipToPadding = false
     ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      // Keep the buttons clear of the gesture-navigation area too, so an upward
+      // swipe on them never starts at the system's home gesture edge.
+      val gestures = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
+      view.setPadding(bars.left, bars.top, bars.right, max(bars.bottom, gestures.bottom))
       WindowInsetsCompat.CONSUMED
     }
 
@@ -168,16 +188,24 @@ internal class CallScreenView(
     content.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
 
     declineButton =
-        roundButton(R.drawable.callreminder_ic_call_end, declineColor, config.label(context, Label.DECLINE), 72) {
-          listener.onDecline()
-        }
+        ringingButton(
+            R.drawable.callreminder_ic_call_end,
+            declineColor,
+            config.label(context, Label.DECLINE),
+            config.label(context, Label.SWIPE_TO_DECLINE)) {
+              listener.onDecline()
+            }
     answerButton =
-        roundButton(R.drawable.callreminder_ic_call, answerColor, config.label(context, Label.ANSWER), 72) {
-          listener.onAnswer()
-        }
-    answerCircle = (answerButton as ViewGroup).getChildAt(0)
-    ringingControls.addView(declineButton, weighted())
-    ringingControls.addView(answerButton, weighted())
+        ringingButton(
+            R.drawable.callreminder_ic_call,
+            answerColor,
+            config.label(context, Label.ANSWER),
+            config.label(context, Label.SWIPE_TO_ANSWER)) {
+              listener.onAnswer()
+            }
+    answerCircle = answerButton.circle
+    ringingControls.addView(declineButton.column, weighted())
+    ringingControls.addView(answerButton.column, weighted())
     content.addView(ringingControls, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) })
 
     activeControls.addView(
@@ -252,6 +280,8 @@ internal class CallScreenView(
     setControlsEnabled(true)
     chronometer.stop()
     header.text = config.label(context, Label.INCOMING_TITLE)
+    if (!ringing) swipeGroup.reset()
+    ringing = true
     startRingingAnimations()
   }
 
@@ -359,6 +389,11 @@ internal class CallScreenView(
             start()
           }
     }
+    startBreathing()
+  }
+
+  /** Not while a ringing button is touched: the circle must stay under the finger. */
+  private fun startBreathing() {
     if (nudge == null) {
       // The Answer circle "breathes" in place (grow, settle, rest) — scaled
       // about its own centre so it stays level with Decline, never moved up.
@@ -376,14 +411,21 @@ internal class CallScreenView(
     }
   }
 
-  private fun stopRingingAnimations() {
-    pulse?.cancel()
-    pulse = null
+  private fun stopBreathing() {
     nudge?.cancel()
     nudge = null
-    pulseRings.forEach { it.alpha = 0f }
     answerCircle.scaleX = 1f
     answerCircle.scaleY = 1f
+  }
+
+  private fun stopRingingAnimations() {
+    ringing = false
+    pulse?.cancel()
+    pulse = null
+    stopBreathing()
+    pulseRings.forEach { it.alpha = 0f }
+    // Abandons a drag in progress (the call was answered elsewhere, timed out, …).
+    swipeGroup.reset()
   }
 
   private fun repeating(animator: ObjectAnimator): ObjectAnimator =
@@ -393,17 +435,7 @@ internal class CallScreenView(
       }
 
   private fun roundButton(icon: Int, color: Int, label: String, sizeDp: Int, onClick: () -> Unit): View {
-    val button =
-        ImageButton(context).apply {
-          setImageResource(icon)
-          imageTintList = ColorStateList.valueOf(contrastOn(color))
-          scaleType = ImageView.ScaleType.FIT_CENTER
-          val inset = dp(sizeDp) * 3 / 10
-          setPadding(inset, inset, inset, inset)
-          background = ripple(oval(color))
-          contentDescription = label
-          setOnClickListener { onClick() }
-        }
+    val button = circleButton(icon, color, label, sizeDp).apply { setOnClickListener { onClick() } }
     return column(Gravity.CENTER_HORIZONTAL).apply {
       clipChildren = false // a scaled (animated) circle may draw past the column
       addView(button, LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)))
@@ -412,6 +444,62 @@ internal class CallScreenView(
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       }, wrap(top = 8))
     }
+  }
+
+  /** A ringing button: its column (for layout) and its circle (what is dragged/animated). */
+  private class RingingButton(val column: View, val circle: View)
+
+  /**
+   * Answer/Decline while ringing. With `answerGesture: 'swipe'` the circle is
+   * dragged upwards (see [SwipeUpButton]): chevrons above it and a hint below
+   * say so. Clicks then only come from accessibility services and keyboards
+   * (touches are consumed by the gesture), so they answer/decline directly —
+   * as do the "Answer"/"Decline" custom accessibility actions.
+   */
+  private fun ringingButton(icon: Int, color: Int, label: String, hintText: String, onCommit: () -> Unit): RingingButton {
+    if (!swipeToAnswer) {
+      val column = roundButton(icon, color, label, 72, onCommit)
+      return RingingButton(column, (column as ViewGroup).getChildAt(0))
+    }
+    val circle = circleButton(icon, color, label, 72)
+    val chevron =
+        ImageView(context).apply {
+          setImageResource(R.drawable.callreminder_ic_swipe_up)
+          imageTintList = ColorStateList.valueOf(textColor)
+          alpha = 1f
+          importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+    val hint =
+        text(12f, alpha = SWIPE_HINT_ALPHA).apply {
+          text = hintText
+          maxLines = 2
+          importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+    val swipe = SwipeUpButton(circle, chevron, hint, swipeGroup, SWIPE_HINT_ALPHA, onCommit)
+    swipe.attach()
+    circle.setOnClickListener { swipe.commit() }
+    ViewCompat.replaceAccessibilityAction(circle, AccessibilityActionCompat.ACTION_CLICK, label) { _, _ ->
+      swipe.commit()
+      true
+    }
+    ViewCompat.addAccessibilityAction(circle, label) { _, _ ->
+      swipe.commit()
+      true
+    }
+    val column =
+        column(Gravity.CENTER_HORIZONTAL).apply {
+          clipChildren = false // the dragged / scaled circle draws past the column
+          clipToPadding = false
+          setPadding(dp(4), 0, dp(4), 0)
+          addView(chevron, LinearLayout.LayoutParams(dp(22), dp(22)).apply { bottomMargin = dp(6) })
+          addView(circle, LinearLayout.LayoutParams(dp(72), dp(72)))
+          addView(text(14f, alpha = 0.9f).apply {
+            text = label
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+          }, wrap(top = 8))
+          addView(hint, wrap(top = 2))
+        }
+    return RingingButton(column, circle)
   }
 
   private fun actionButton(action: CallAction): View {
@@ -436,6 +524,17 @@ internal class CallScreenView(
       setOnClickListener { listener.onAction(action.id) }
     }
   }
+
+  private fun circleButton(icon: Int, color: Int, label: String, sizeDp: Int) =
+      ImageButton(context).apply {
+        setImageResource(icon)
+        imageTintList = ColorStateList.valueOf(contrastOn(color))
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        val inset = dp(sizeDp) * 3 / 10
+        setPadding(inset, inset, inset, inset)
+        background = ripple(oval(color))
+        contentDescription = label
+      }
 
   private fun ripple(content: Drawable): Drawable =
       RippleDrawable(ColorStateList.valueOf(ColorUtils.setAlphaComponent(textColor, 0x40)), content, null)
@@ -473,5 +572,7 @@ internal class CallScreenView(
     const val PULSE_MS = 1_600L
     /** Peak size of the Answer circle's breathing nudge (×). */
     const val NUDGE_SCALE = 1.1f
+    /** Resting opacity of the "Swipe up to …" hints. */
+    const val SWIPE_HINT_ALPHA = 0.6f
   }
 }

@@ -1,5 +1,6 @@
 import type {
   ActiveCall,
+  BatteryUsage,
   CallAction,
   CallPresentation,
   CallReminderConfig,
@@ -24,6 +25,13 @@ const PERMISSION_STATES: readonly PermissionState[] = [
   'granted',
   'denied',
   'not_determined',
+  'not_applicable',
+  'unknown',
+];
+const BATTERY_USAGE: readonly BatteryUsage[] = [
+  'unrestricted',
+  'optimized',
+  'restricted',
   'not_applicable',
   'unknown',
 ];
@@ -294,6 +302,7 @@ export function validateConfig(config: CallReminderConfig): CallReminderConfig {
     smallIcon: optionalString(config.smallIcon, 'smallIcon'),
     largeIcon: optionalString(config.largeIcon, 'largeIcon'),
     labels,
+    answerGesture: optionalEnum(config.answerGesture, 'answerGesture', ['swipe', 'tap'] as const),
     defaultActions: validateActions(config.defaultActions, 'defaultActions'),
     ringAudioUsage: optionalEnum(config.ringAudioUsage, 'ringAudioUsage', [
       'alarm',
@@ -398,6 +407,10 @@ export function toPermissionState(value: unknown): PermissionState {
     : 'unknown';
 }
 
+export function toBatteryUsage(value: unknown): BatteryUsage {
+  return BATTERY_USAGE.includes(value as BatteryUsage) ? (value as BatteryUsage) : 'unknown';
+}
+
 export function toPermissions(raw: unknown): CallReminderPermissions {
   const value = isRecord(raw) ? raw : {};
   const platform = value.platform === 'ios' ? 'ios' : 'android';
@@ -411,6 +424,8 @@ export function toPermissions(raw: unknown): CallReminderPermissions {
     fullScreenIntent: toPermissionState(value.fullScreenIntent),
     exactAlarm: toPermissionState(value.exactAlarm),
     batteryOptimization: toPermissionState(value.batteryOptimization),
+    batteryUsage: toBatteryUsage(value.batteryUsage),
+    backgroundRestricted: value.backgroundRestricted === true,
     autoStart: toPermissionState(value.autoStart),
     oemHasAutoStartManager: value.oemHasAutoStartManager === true,
     timeSensitive: toPermissionState(value.timeSensitive),

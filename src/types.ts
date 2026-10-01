@@ -18,6 +18,9 @@ export type PermissionState =
   | 'not_applicable'
   | 'unknown';
 
+/** See `CallReminderPermissions.batteryUsage`. */
+export type BatteryUsage = 'unrestricted' | 'optimized' | 'restricted' | 'not_applicable' | 'unknown';
+
 export interface CallReminderPermissions {
   platform: 'android' | 'ios';
   osVersion: string;
@@ -41,8 +44,30 @@ export interface CallReminderPermissions {
    * nor USE_EXACT_ALARM (the library declares neither), and on iOS.
    */
   exactAlarm: PermissionState;
-  /** Android: `granted` when the app is exempt from battery optimisation. iOS: not_applicable. */
+  /**
+   * Android: whether battery management can hold back reminder calls.
+   * `granted` unless the app is background-restricted (`batteryUsage ===
+   * 'restricted'`), i.e. also when it is battery-*optimized* (the Android
+   * default, "Allow background usage" on), which does not delay high-priority
+   * FCM messages. `denied` only when background-restricted. iOS: not_applicable.
+   *
+   * Before 0.2.0 this was `granted` only when the app was exempt from
+   * battery optimisation ("Unrestricted"); read `batteryUsage` for that.
+   */
   batteryOptimization: PermissionState;
+  /**
+   * Android: the app's battery usage setting.
+   * - `unrestricted`: exempt from battery optimisation (`isIgnoringBatteryOptimizations`).
+   * - `optimized`: the Android default; fine for high-priority FCM.
+   * - `restricted`: background-restricted (`ActivityManager.isBackgroundRestricted()`,
+   *   Android 9+; on Android 14/15 "Allow background usage" off / "Restricted"):
+   *   calls may arrive late or not at all.
+   * - `unknown`: could not be read.
+   * iOS: `not_applicable`.
+   */
+  batteryUsage: BatteryUsage;
+  /** Android 9+: `ActivityManager.isBackgroundRestricted()`. False elsewhere and on iOS. */
+  backgroundRestricted: boolean;
   /** OEM auto-start cannot be queried: `unknown` when the OEM ships a manager, else not_applicable. */
   autoStart: PermissionState;
   oemHasAutoStartManager: boolean;
@@ -84,7 +109,22 @@ export interface CallReminderLabels {
   replay: string;
   /** Shown on the quiet notification posted while the user is busy. */
   tapToAnswer: string;
+  /** Hint under the Answer button while ringing with `answerGesture: 'swipe'`. */
+  swipeToAnswer: string;
+  /** Hint under the Decline button while ringing with `answerGesture: 'swipe'`. */
+  swipeToDecline: string;
 }
+
+/**
+ * How the ringing call screen is answered or declined:
+ * - `swipe` (default): drag the Answer (or Decline) button upwards. A plain
+ *   tap only nudges the button, so a phone in a pocket does not answer.
+ *   TalkBack/VoiceOver, Switch Access and keyboard users activate the buttons
+ *   normally (double-tap / custom actions "Answer" and "Decline").
+ * - `tap`: a tap on the button answers/declines (the 0.1.x behaviour).
+ * The notification's Answer/Decline actions are system buttons and unaffected.
+ */
+export type AnswerGesture = 'swipe' | 'tap';
 
 export interface CallReminderIosConfig {
   /** Notification category registered for call reminders (default `CALL_REMINDER`). */
@@ -169,6 +209,8 @@ export interface CallReminderConfig {
   /** Android drawable/mipmap resource name (iOS: asset name) for the caller avatar. */
   largeIcon?: string;
   labels?: Partial<CallReminderLabels>;
+  /** Answer/Decline on the ringing call screen (default `swipe`). */
+  answerGesture?: AnswerGesture;
   /** Actions shown after answering when a call does not specify its own. */
   defaultActions?: CallAction[];
   /** Android audio usage for the ring: `alarm` (default), `ringtone` or `notification`. */

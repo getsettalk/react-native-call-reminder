@@ -179,6 +179,59 @@ describe('validation', () => {
     expect(permissions.oemHasAutoStartManager).toBe(false);
   });
 
+  it('normalises the battery usage fields', async () => {
+    const api = load();
+    mockNative.getPermissions.mockResolvedValueOnce({
+      platform: 'android',
+      batteryOptimization: 'granted',
+      batteryUsage: 'optimized',
+      backgroundRestricted: false,
+    });
+    await expect(api.getPermissions()).resolves.toMatchObject({
+      batteryOptimization: 'granted',
+      batteryUsage: 'optimized',
+      backgroundRestricted: false,
+    });
+    mockNative.getPermissions.mockResolvedValueOnce({
+      platform: 'android',
+      batteryOptimization: 'denied',
+      batteryUsage: 'restricted',
+      backgroundRestricted: true,
+    });
+    await expect(api.getPermissions()).resolves.toMatchObject({
+      batteryOptimization: 'denied',
+      batteryUsage: 'restricted',
+      backgroundRestricted: true,
+    });
+    // Older/odd native values never leak through.
+    mockNative.getPermissions.mockResolvedValueOnce({
+      platform: 'ios',
+      batteryUsage: 'sleepy',
+      backgroundRestricted: 'yes',
+    });
+    await expect(api.getPermissions()).resolves.toMatchObject({
+      batteryUsage: 'unknown',
+      backgroundRestricted: false,
+    });
+  });
+
+  it('validates the answer gesture and passes the swipe labels through', async () => {
+    const api = load();
+    await expect(
+      api.configure({ answerGesture: 'drag' as unknown as 'swipe' }),
+    ).rejects.toThrow(/answerGesture/);
+    await api.configure({
+      answerGesture: 'tap',
+      labels: { swipeToAnswer: 'Slide up to listen', swipeToDecline: 'Slide up to skip' },
+    });
+    expect(mockNative.configure).toHaveBeenLastCalledWith({
+      answerGesture: 'tap',
+      labels: { swipeToAnswer: 'Slide up to listen', swipeToDecline: 'Slide up to skip' },
+    });
+    await api.configure({});
+    expect(mockNative.configure).toHaveBeenLastCalledWith({});
+  });
+
   it('passes a null channel id when none is given', async () => {
     const api = load();
     await api.openNotificationSettings();

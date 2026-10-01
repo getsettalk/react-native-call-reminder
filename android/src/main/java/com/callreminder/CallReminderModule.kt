@@ -132,9 +132,10 @@ class CallReminderModule(context: ReactApplicationContext) :
 
   override fun openBatteryOptimizationSettings(promise: Promise) {
     val context = reactApplicationContext
-    val current = PermissionsHelper.batteryOptimization(context)
-    if (current == PermissionState.GRANTED) {
-      promise.resolve(current)
+    // Nothing left to allow when already unrestricted. An optimized app (also
+    // `granted`) still gets the page, so the user can pick "Unrestricted".
+    if (PermissionsHelper.batteryUsage(context) == BatteryUsage.UNRESTRICTED) {
+      promise.resolve(PermissionsHelper.batteryOptimization(context))
       return
     }
     openSettingsAndWait(PermissionsHelper.batteryOptimizationSettings(context), promise) {

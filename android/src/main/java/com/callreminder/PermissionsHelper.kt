@@ -2,6 +2,7 @@ package com.callreminder
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
@@ -28,11 +29,21 @@ internal object PermissionState {
   fun of(granted: Boolean) = if (granted) GRANTED else DENIED
 }
 
+/** The app's battery usage setting as reported to JS (`BatteryUsage`). */
+internal object BatteryUsage {
+  const val UNRESTRICTED = "unrestricted"
+  const val OPTIMIZED = "optimized"
+  const val RESTRICTED = "restricted"
+  const val UNKNOWN = "unknown"
+}
+
 internal object PermissionsHelper {
   private const val PREFS = "com.callreminder.permissions"
   private const val KEY_NOTIFICATIONS_ASKED = "notificationsAsked"
   // Not in the public SDK; readable on AOSP and most OEM builds.
   private const val SECURE_LOCK_SCREEN_SHOW_NOTIFICATIONS = "lock_screen_show_notifications"
+  // Settings.ACTION_VIEW_ADVANCED_POWER_USAGE_DETAIL (@hide): the app's battery usage page.
+  private const val ACTION_VIEW_ADVANCED_POWER_USAGE_DETAIL = "android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL"
 
   fun snapshot(context: Context, activity: Activity?): WritableMap {
     val config = ConfigStore.load(context)
@@ -49,7 +60,10 @@ internal object PermissionsHelper {
       putString("channel", channel)
       putString("fullScreenIntent", fullScreen)
       putString("exactAlarm", exactAlarm(context))
-      putString("batteryOptimization", batteryOptimization(context))
+      val battery = batteryUsage(context)
+      putString("batteryOptimization", batteryOptimization(battery))
+      putString("batteryUsage", battery)
+      putBoolean("backgroundRestricted", battery == BatteryUsage.RESTRICTED)
       putString("autoStart", if (oemManager) PermissionState.UNKNOWN else PermissionState.NOT_APPLICABLE)
       putBoolean("oemHasAutoStartManager", oemManager)
       putString("timeSensitive", PermissionState.NOT_APPLICABLE)
@@ -133,10 +147,41 @@ internal object PermissionsHelper {
     return Manifest.permission.SCHEDULE_EXACT_ALARM in requested || Manifest.permission.USE_EXACT_ALARM in requested
   }
 
-  fun batteryOptimization(context: Context): String {
-    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return PermissionState.UNKNOWN
-    return PermissionState.of(power.isIgnoringBatteryOptimizations(context.packageName))
+  /**
+   * - `restricted`: background-restricted by the user (Android 9+; on Android
+   *   14/15 "Allow background usage" off / "Restricted"). High-priority FCM
+   *   messages are then held back and the app cannot start in the background.
+   * - `unrestricted`: exempt from battery optimisation.
+   * - `optimized`: the Android default ("Allow background usage" on). Doze
+   *   still delivers high-priority FCM messages at once, so calls ring.
+   * (minSdk is 24, so the pre-Marshmallow "no optimisation at all" case never applies.)
+   */
+  fun batteryUsage(context: Context): String {
+    if (isBackgroundRestricted(context)) return BatteryUsage.RESTRICTED
+    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return BatteryUsage.UNKNOWN
+    return if (power.isIgnoringBatteryOptimizations(context.packageName)) BatteryUsage.UNRESTRICTED
+    else BatteryUsage.OPTIMIZED
   }
+
+  fun isBackgroundRestricted(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+    val activityManager = context.getSystemService(ActivityManager::class.java) ?: return false
+    return activityManager.isBackgroundRestricted
+  }
+
+  /**
+   * Whether battery management stands in the way of reminder calls: `denied`
+   * only while background-restricted. Being merely battery-*optimized* (the
+   * default) is `granted` — reporting it as a problem would be a false alarm.
+   */
+  fun batteryOptimization(context: Context): String = batteryOptimization(batteryUsage(context))
+
+  private fun batteryOptimization(batteryUsage: String): String =
+      when (batteryUsage) {
+        BatteryUsage.RESTRICTED -> PermissionState.DENIED
+        BatteryUsage.UNKNOWN -> PermissionState.UNKNOWN
+        else -> PermissionState.GRANTED
+      }
 
   fun lockScreen(context: Context, config: CallReminderConfig): String {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -173,11 +218,33 @@ internal object PermissionsHelper {
       }
 
   /**
-   * The battery-optimisation *list*. We deliberately do not use
-   * ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (needs a Play-restricted permission).
+   * The most specific page that lets the user change this app's battery usage,
+   * keeping only screens that resolve on this device:
+   * 1. The app's own battery page (AOSP Settings' `AdvancedPowerUsageDetailActivity`,
+   *    reached with `android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL` + `package:`
+   *    data): "Background restriction" on Android 9–11, Unrestricted / Optimized /
+   *    Restricted on 12–13, "Allow background usage" on 14+. Hidden action, so
+   *    OEM builds may lack it — hence the resolve check.
+   * 2. The app's details page (always present; its Battery entry leads to the same).
+   * 3. The battery-optimisation list.
+   * We deliberately do not use ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (needs a
+   * Play-restricted permission the library never declares).
    */
   fun batteryOptimizationSettings(context: Context): List<Intent> =
-      listOf(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), appDetails(context))
+      listOf(
+              Intent(ACTION_VIEW_ADVANCED_POWER_USAGE_DETAIL, packageUri(context)),
+              appDetails(context),
+              Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+          .filter { resolves(context, it) }
+          .ifEmpty { listOf(appDetails(context)) }
+
+  /** Visible thanks to the `<queries>` entries in the library manifest. */
+  private fun resolves(context: Context, intent: Intent): Boolean =
+      try {
+        intent.resolveActivity(context.packageManager) != null
+      } catch (error: RuntimeException) {
+        false
+      }
 
   fun notificationSettings(context: Context, channelId: String?): List<Intent> =
       buildList {

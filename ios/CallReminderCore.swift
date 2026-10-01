@@ -1017,6 +1017,8 @@ public final class CallReminderCore: NSObject {
       "fullScreenIntent": PermissionState.notApplicable,
       "exactAlarm": PermissionState.notApplicable,
       "batteryOptimization": PermissionState.notApplicable,
+      "batteryUsage": PermissionState.notApplicable,
+      "backgroundRestricted": false,
       "autoStart": PermissionState.notApplicable,
       "oemHasAutoStartManager": false,
       "timeSensitive": state(settings.timeSensitiveSetting),

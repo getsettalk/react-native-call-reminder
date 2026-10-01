@@ -26,6 +26,10 @@ even if it was killed in the meantime.
 | Android (API 24 – 36) | Production-tested end to end on a real FCM push: lock screen, background, killed process, full-screen denied, timeout, voice fallback. |
 | iOS (15.1+) | Implemented and code-reviewed, **not yet built or device-tested**. Treat as beta and test on a device before shipping. |
 
+0.2.0 adds swipe-to-answer on the call screen and the `batteryUsage` / `backgroundRestricted`
+permission fields (see [CHANGELOG](./CHANGELOG.md)); test the new call-screen gesture on your
+devices before shipping.
+
 ---
 
 ## Why this library?
@@ -216,7 +220,8 @@ exact-alarm permission, no battery-optimisation permission.
    number.
 7. **OEM battery managers (Xiaomi, Oppo, Vivo, …).** Guide users with
    `openAutoStartSettings()` and `openBatteryOptimizationSettings()` — these open settings
-   pages and need no extra permission.
+   pages and need no extra permission (the library never declares
+   `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`).
 
 ## App Store: what to do
 
@@ -261,6 +266,7 @@ await CallReminder.configure({
   appName: 'Acme Health',
   accentColor: '#FF0F766E',
   labels: { answer: 'Answer', decline: 'Not now', incomingTitle: 'Reminder call' },
+  answerGesture: 'swipe', // default: drag Answer/Decline up; 'tap' to answer with a tap
   defaultActions: [
     { id: 'taken', label: 'I took it', style: 'primary' },
     { id: 'snooze', label: 'Remind me in 10 min', style: 'secondary' },
@@ -274,6 +280,10 @@ if (permissions.notifications !== 'granted') {
 }
 if (permissions.fullScreenIntent === 'denied') {
   await CallReminder.requestFullScreenIntentPermission(); // Android 14+: opens Settings
+}
+if (permissions.batteryUsage === 'restricted') {
+  // Only "Restricted" holds calls back; the default "Optimized" is fine.
+  await CallReminder.openBatteryOptimizationSettings();
 }
 
 const { presentation, reason } = await CallReminder.showIncomingCall({
@@ -313,7 +323,7 @@ await CallReminder.acknowledgeEvents(pending.map(e => e.id));
 | `requestNotificationPermission({ criticalAlerts? })` | `Promise<PermissionState>` | Android 13+: POST_NOTIFICATIONS prompt (needs a foreground activity, rejects with `no_activity` otherwise). iOS: alert/sound/badge, plus Critical Alerts when requested. |
 | `requestFullScreenIntentPermission()` | `Promise<PermissionState>` | Android 14+: opens *Full-screen notifications* for the app and resolves with the re-checked state when the user returns. Resolves immediately when already granted or not applicable (`granted` below Android 14, `not_applicable` on iOS). |
 | `openExactAlarmSettings()` | `Promise<PermissionState>` | Android 12+: *Alarms & reminders*. Same semantics: resolves immediately when already granted or `not_applicable` (below Android 12, or the app declares no exact-alarm permission), otherwise on return. |
-| `openBatteryOptimizationSettings()` | `Promise<PermissionState>` | Android: battery-optimisation list (`granted` = app is exempt). Resolves immediately when already exempt, otherwise on return. |
+| `openBatteryOptimizationSettings()` | `Promise<PermissionState>` | Android: the most specific page where the user can change the app's battery usage — the app's own *Battery* page where the device has one, else the app's details page, else the battery-optimisation list (see [Battery usage](#battery-usage)). Resolves with the re-checked `batteryOptimization` on return (`denied` only while background-restricted); resolves immediately, opening nothing, when `batteryUsage` is already `unrestricted`. iOS: `not_applicable`. |
 | `openAutoStartSettings()` | `Promise<boolean>` | Opens the OEM auto-start manager (Xiaomi/Redmi/POCO, Oppo/Realme/OnePlus, Vivo/iQOO, Huawei/Honor, Samsung, Asus, Letv, Meizu, Nokia). `false` when none could be opened. |
 | `openNotificationSettings(channelId?)` | `Promise<void>` | Android: the channel page (default: the call channel), else the app's notification settings. iOS 16+: the app's notification settings. |
 | `openAppSettings()` | `Promise<void>` | |
@@ -342,7 +352,9 @@ reaching native code.
 | `channel` | call channel exists, enabled, importance HIGH (`not_determined` until `configure()` / `showIncomingCall()` created it) | `not_applicable` |
 | `fullScreenIntent` | API 34+: `canUseFullScreenIntent()`; older: `granted` | `not_applicable` |
 | `exactAlarm` | API 31+: `canScheduleExactAlarms()`; older: `granted`; `not_applicable` when the app declares neither `SCHEDULE_EXACT_ALARM` nor `USE_EXACT_ALARM` | `not_applicable` |
-| `batteryOptimization` | `granted` when exempt | `not_applicable` |
+| `batteryOptimization` | `denied` only when background-restricted, else `granted` (also when *optimized*). **Changed in 0.2.0**, see [Battery usage](#battery-usage) | `not_applicable` |
+| `batteryUsage` | `unrestricted`, `optimized`, `restricted` or `unknown` | `not_applicable` |
+| `backgroundRestricted` | API 28+: `ActivityManager.isBackgroundRestricted()`; older: `false` | `false` |
 | `autoStart` / `oemHasAutoStartManager` | `unknown` when the OEM ships a manager (its state cannot be read), else `not_applicable` | `not_applicable` / `false` |
 | `timeSensitive` | `not_applicable` | Time Sensitive setting |
 | `criticalAlerts` | `not_applicable` | Critical Alerts setting |
@@ -350,6 +362,38 @@ reaching native code.
 | `allRequiredGranted` | notifications + channel + full-screen intent | notifications |
 
 Plus `platform`, `osVersion`, `sdkInt` (Android) and `manufacturer`.
+
+#### Battery usage
+
+Android has three battery settings per app. Only one of them is a problem for reminder calls:
+
+| `batteryUsage` | Android setting | Calls | `batteryOptimization` |
+| --- | --- | --- | --- |
+| `optimized` | The default. Android 14/15: *Allow background usage* **on** (Optimized); 12–13: *Optimized* | Ring on time: high-priority FCM messages are delivered at once even in Doze | `granted` |
+| `unrestricted` | *Allow background usage* → *Unrestricted* (exempt from battery optimisation) | Ring on time | `granted` |
+| `restricted` | Android 14/15: *Allow background usage* **off**; 12–13: *Restricted*; 9–11: *Background restriction* on (`ActivityManager.isBackgroundRestricted()`) | May arrive late or not at all | `denied` |
+
+So show a warning only for `batteryUsage === 'restricted'` (or `backgroundRestricted`), and
+offer `openBatteryOptimizationSettings()` to fix it. An *optimized* app is fine — asking
+users to switch to *Unrestricted* is optional advice for aggressive OEM battery savers
+(see [OEM notes](#oem-notes)), not a requirement. Battery settings never count towards
+`allRequiredGranted`.
+
+`openBatteryOptimizationSettings()` tries, in order, only screens that resolve on the device:
+
+1. The app's own battery page — `android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL` with
+   `package:<your app>` data, served by AOSP Settings (`AdvancedPowerUsageDetailActivity`)
+   and showing *Unrestricted / Optimized / Restricted* or *Allow background usage*. It is a
+   hidden Settings action, so some OEM builds lack it.
+2. The app's details page (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`), whose *Battery*
+   entry leads to the same choice.
+3. The battery-optimisation list (`Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`).
+
+> **0.2.0 changed `batteryOptimization`.** In 0.1.x it was `granted` only when the app was
+> exempt from battery optimisation (*Unrestricted*), so the Android default (*Optimized*,
+> *Allow background usage* on) was reported as `denied` — a false alarm. It is now `denied`
+> only when the app is background-restricted. If you need the old meaning, use
+> `batteryUsage === 'unrestricted'`.
 
 Reading permissions never creates notification channels, so call `configure()` first (a
 channel's sound and vibration are frozen when it is created; one created with default
@@ -369,7 +413,8 @@ settings before your `configure()` would linger in the system settings forever).
 | `appName` | app label | Brand line on the call screen. |
 | `smallIcon` | bell | Android drawable/mipmap name for the status bar. |
 | `largeIcon` | app icon | Android drawable/mipmap or iOS asset name for the avatar. |
-| `labels` | English | `answer`, `decline`, `incomingTitle`, `speaking`, `listening`, `ended`, `endCall`, `replay`, `tapToAnswer`. |
+| `labels` | English | `answer`, `decline`, `incomingTitle`, `speaking`, `listening`, `ended`, `endCall`, `replay`, `tapToAnswer`, `swipeToAnswer` ("Swipe up to answer"), `swipeToDecline` ("Swipe up to decline"). |
+| `answerGesture` | `'swipe'` | How the ringing call screen is answered/declined: `'swipe'` (drag the button up) or `'tap'` (the 0.1.x behaviour). See [Answering on the call screen](#answering-on-the-call-screen). |
 | `defaultActions` | none | Buttons shown after answering when a call has no `actions`. Up to 4. |
 | `duplicateWindowSeconds` | `60` | A second `showIncomingCall` with the same `callId` within this window is `suppressed`. |
 | `idleTimeoutSeconds` | `60` | An answered call ends (`ended`, reason `idle`) this long after speech finished without an action. |
@@ -408,6 +453,30 @@ Presentation `reason`s: `app_foreground`, `device_in_use`, `full_screen_intent_d
 `duplicate`, `notifications_disabled`, `channel_disabled`, `post_failed` (iOS),
 `time_sensitive`, `time_sensitive_disabled`, `critical`, `active`, `passive`, `alerts_disabled` (iOS).
 
+### Answering on the call screen
+
+With the default `answerGesture: 'swipe'`, the ringing call screen (Android full-screen
+call screen, iOS in-app call screen) is answered by **dragging the green Answer button
+upwards** and declined by dragging the red Decline button upwards:
+
+- Each button follows the finger with increasing resistance; small chevrons above it and a
+  hint below it (`labels.swipeToAnswer` / `labels.swipeToDecline`) say what to do.
+- Released past ~40 % of the drag distance (140 dp/pt, shorter on small or landscape
+  screens), or flung upwards quickly, it commits with a haptic tick; otherwise it springs
+  back.
+- A plain tap does **not** answer — so a phone in a pocket or bag cannot pick up the call —
+  it bounces the button and briefly emphasises the hint.
+- Only one button can be dragged at a time and only the first finger counts.
+- Screen readers: TalkBack / VoiceOver users double-tap the button as usual (it answers or
+  declines straight away), and the custom accessibility actions *Answer* / *Decline* are
+  offered. Switch Access / Switch Control and hardware keyboards activate it directly too.
+- The Answer button keeps its "breathing" pulse while idle (paused while a button is
+  touched). Both circles stay level and are never clipped.
+
+Only the ringing state uses the gesture: the buttons after answering (*Repeat*, *End call*,
+your actions) are ordinary taps, and the notification's Answer / Decline actions are system
+buttons and unchanged. Use `answerGesture: 'tap'` to keep tap-to-answer.
+
 ### Events
 
 `{ id, type, callId, payload, timestamp, actionId?, presentation?, reason?, error? }`
@@ -432,8 +501,9 @@ and are delivered live only, never queued.
 `POST_NOTIFICATIONS`, `USE_FULL_SCREEN_INTENT`, `VIBRATE`, `WAKE_LOCK` (held by React
 Native's `HeadlessJsTaskService` only while a background event task runs), the call
 activity (own task, excluded from recents, shown over the lock screen), a non-exported
-receiver and the headless service. `<queries>` entries make the TTS engine and OEM
-auto-start managers visible on Android 11+. Nothing is exported.
+receiver and the headless service. `<queries>` entries make the TTS engine, OEM
+auto-start managers and the battery-usage settings pages visible on Android 11+. Nothing is
+exported.
 
 ### Full-screen intents and Google Play
 
@@ -480,15 +550,20 @@ process. Guide users through:
 - **Huawei / Honor:** *App launch* → manage manually, allow all three toggles.
 - **Samsung:** remove the app from *Sleeping apps* / *Deep sleeping apps* (`openBatteryOptimizationSettings()` / `openAutoStartSettings()`).
 
+On stock Android the battery setting only matters when it is *Restricted*
+(`batteryUsage === 'restricted'`, see [Battery usage](#battery-usage)).
+
 `getPermissions().oemHasAutoStartManager` tells you whether such a screen exists.
 
 ### Overriding resources
 
 Every resource is prefixed `callreminder_` and can be redefined in your app (including
-translations in `values-xx/`): strings `callreminder_label_*`, `callreminder_channel_*`;
-colours `callreminder_background`, `callreminder_accent`, `callreminder_text`,
-`callreminder_answer`, `callreminder_decline`; drawables `callreminder_ic_notification`,
-`callreminder_ic_call`, `callreminder_ic_call_end`, `callreminder_ic_replay`; theme
+translations in `values-xx/`): strings `callreminder_label_*` (including
+`callreminder_label_swipe_to_answer` / `callreminder_label_swipe_to_decline`),
+`callreminder_channel_*`; colours `callreminder_background`, `callreminder_accent`,
+`callreminder_text`, `callreminder_answer`, `callreminder_decline`; drawables
+`callreminder_ic_notification`, `callreminder_ic_call`, `callreminder_ic_call_end`,
+`callreminder_ic_replay`, `callreminder_ic_swipe_up`; theme
 `CallReminder.Theme.Incoming`. Values passed to `configure()` take precedence.
 
 R8/ProGuard consumer rules are bundled.

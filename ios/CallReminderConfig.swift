@@ -12,6 +12,8 @@ enum Label: String {
   case endCall
   case replay
   case tapToAnswer
+  case swipeToAnswer
+  case swipeToDecline
 
   var defaultText: String {
     switch self {
@@ -24,6 +26,8 @@ enum Label: String {
     case .endCall: return "End call"
     case .replay: return "Repeat"
     case .tapToAnswer: return "Tap Answer to listen"
+    case .swipeToAnswer: return "Swipe up to answer"
+    case .swipeToDecline: return "Swipe up to decline"
     }
   }
 }
@@ -66,6 +70,9 @@ final class CallReminderConfig {
   let defaultActions: [CallAction]
   let duplicateWindow: TimeInterval
   let idleTimeout: TimeInterval
+  /// `answerGesture`: the ringing call screen is answered/declined by swiping
+  /// the button up (default) rather than tapping it.
+  let answerBySwipe: Bool
   let categoryId: String
   let threadId: String
   let sound: String
@@ -92,6 +99,7 @@ final class CallReminderConfig {
     defaultActions = CallAction.list(raw["defaultActions"])
     duplicateWindow = (raw.double("duplicateWindowSeconds") ?? 60).clamped(0, 86_400)
     idleTimeout = (raw.double("idleTimeoutSeconds") ?? 60).clamped(5, 600)
+    answerBySwipe = raw.nonEmptyString("answerGesture") != "tap"
     labels = raw.stringMap("labels")
     accent = raw.nonEmptyString("accentColor")
     background = raw.nonEmptyString("backgroundColor")
