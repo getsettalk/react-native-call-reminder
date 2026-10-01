@@ -1,0 +1,65 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+
+  <!-- Android 13+ runtime permission to post the ringing notification. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Full-screen incoming-call screen. Android 14+ only auto-grants this to
+       calling/alarm-clock apps: other apps must declare their use in the Play
+       Console and ask the user (see requestFullScreenIntentPermission). When it
+       is not granted the system shows a sticky heads-up notification instead. -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- Required by React Native's HeadlessJsTaskService, which holds a partial
+       wake lock only while a background event task is running. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- Package visibility (Android 11+): binding the text-to-speech engine and
+       detecting OEM auto-start managers. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.TTS_SERVICE" />
+    </intent>
+    <package android:name="com.miui.securitycenter" />
+    <package android:name="com.coloros.safecenter" />
+    <package android:name="com.oppo.safe" />
+    <package android:name="com.coloros.oppoguardelf" />
+    <package android:name="com.oplus.battery" />
+    <package android:name="com.oneplus.security" />
+    <package android:name="com.iqoo.secure" />
+    <package android:name="com.vivo.permissionmanager" />
+    <package android:name="com.huawei.systemmanager" />
+    <package android:name="com.hihonor.systemmanager" />
+    <package android:name="com.samsung.android.lool" />
+    <package android:name="com.samsung.android.sm" />
+    <package android:name="com.asus.mobilemanager" />
+    <package android:name="com.letv.android.letvsafe" />
+    <package android:name="com.meizu.safe" />
+    <package android:name="com.evenwell.powersaving.g3" />
+  </queries>
+
+  <application>
+    <!-- Own task + no recents entry so the call screen never disturbs the
+         host app's back stack. showWhenLocked/turnScreenOn are also set in
+         code (pre-27 fallback); declaring them here lets System UI open the
+         screen over the keyguard straight from a notification action. -->
+    <activity
+      android:name="com.callreminder.IncomingCallActivity"
+      android:enableOnBackInvokedCallback="true"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:launchMode="singleInstance"
+      android:showWhenLocked="true"
+      android:taskAffinity="${applicationId}.callreminder"
+      android:theme="@style/CallReminder.Theme.Incoming"
+      android:turnScreenOn="true"
+      tools:targetApi="34" />
+
+    <receiver
+      android:name="com.callreminder.CallActionReceiver"
+      android:exported="false" />
+
+    <service
+      android:name="com.callreminder.CallReminderHeadlessService"
+      android:exported="false" />
+  </application>
+</manifest>

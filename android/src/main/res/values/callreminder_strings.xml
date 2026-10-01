@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default copy. Every string can be overridden from JS via configure({ labels })
+     or by redefining the resource (including translations, values-xx/) in the
+     host app. -->
+<resources>
+  <string name="callreminder_channel_name">Reminder calls</string>
+  <string name="callreminder_channel_description">Rings like a phone call when a reminder is due.</string>
+  <string name="callreminder_label_answer">Answer</string>
+  <string name="callreminder_label_decline">Decline</string>
+  <string name="callreminder_label_incoming_title">Incoming reminder call</string>
+  <string name="callreminder_label_speaking">Speaking…</string>
+  <string name="callreminder_label_listening">Choose an option</string>
+  <string name="callreminder_label_ended">Call ended</string>
+  <string name="callreminder_label_end_call">End call</string>
+  <string name="callreminder_label_replay">Repeat</string>
+  <string name="callreminder_label_tap_to_answer">Tap Answer to listen</string>
+  <string name="callreminder_a11y_call_duration">Call duration %1$s</string>
+</resources>

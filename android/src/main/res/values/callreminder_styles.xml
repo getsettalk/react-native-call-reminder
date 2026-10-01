@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Plain framework theme: the call screen is built in code and does not need
+       AppCompat/Material, which keeps the library free of theme requirements on
+       the host app. Bars are made transparent at runtime (edge-to-edge). -->
+  <style name="CallReminder.Theme.Incoming" parent="@android:style/Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@color/callreminder_background</item>
+    <item name="android:windowShowWallpaper">false</item>
+    <item name="android:windowAnimationStyle">@android:style/Animation.Activity</item>
+    <item name="android:windowDisablePreview">false</item>
+    <item name="android:windowIsTranslucent">false</item>
+    <item name="android:colorAccent">@color/callreminder_accent</item>
+  </style>
+</resources>

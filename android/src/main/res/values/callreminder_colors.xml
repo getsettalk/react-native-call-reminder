@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="callreminder_background">#FF0E1A24</color>
+  <color name="callreminder_accent">#FF2F80ED</color>
+  <color name="callreminder_text">#FFFFFFFF</color>
+  <color name="callreminder_answer">#FF22A06B</color>
+  <color name="callreminder_decline">#FFE5484D</color>
+</resources>

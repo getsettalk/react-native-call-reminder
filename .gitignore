@@ -1,0 +1,6 @@
+# Build output (published to npm, never committed)
+lib/
+# Only when the library is developed on its own; the app's Metro config
+# ignores this folder (a second react-native copy would break the app).
+node_modules/
+*.tgz
