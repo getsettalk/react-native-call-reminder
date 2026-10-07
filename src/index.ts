@@ -4,6 +4,7 @@ import NativeCallReminder from './NativeCallReminder';
 import {
   CallReminderError,
   toActiveCall,
+  toDiagnostics,
   toEvent,
   toLanguageAvailability,
   toPermissionState,
@@ -18,6 +19,7 @@ import type {
   ActiveCall,
   CallReminderBackgroundHandler,
   CallReminderConfig,
+  CallReminderDiagnostics,
   CallReminderEvent,
   CallReminderListener,
   CallReminderPermissions,
@@ -56,6 +58,18 @@ export async function configure(config: CallReminderConfig): Promise<void> {
 
 export async function getPermissions(): Promise<CallReminderPermissions> {
   return toPermissions(await NativeCallReminder.getPermissions());
+}
+
+/**
+ * One snapshot of everything that can keep a reminder call from reaching this device:
+ * permissions, battery/standby state, Do Not Disturb, every notification channel, recent
+ * process deaths (e.g. an OEM "swipe kill" that force-stopped the app), the OEM skin, the
+ * TTS engine and more. Read-only and best-effort — fields that cannot be read are
+ * `unknown`/`null` rather than errors — and collected off the UI thread. Meant to be sent
+ * to your backend so support can debug a user's phone remotely (README → Diagnostics).
+ */
+export async function getDiagnostics(): Promise<CallReminderDiagnostics> {
+  return toDiagnostics(await NativeCallReminder.getDiagnostics());
 }
 
 /**
@@ -287,6 +301,7 @@ const CallReminder = {
   HEADLESS_TASK_NAME,
   configure,
   getPermissions,
+  getDiagnostics,
   requestNotificationPermission,
   requestFullScreenIntentPermission,
   openExactAlarmSettings,

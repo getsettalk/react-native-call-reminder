@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Diagnostics</title><link rel="stylesheet" href="style.css">
+<style>.card h3 { font-size: 15px; margin-bottom: 10px; } .card { width: 520px; }</style></head>
+<body>
+<div class="canvas">
+  <div class="title">"Why didn't my reminder ring?" — answered remotely</div>
+  <div class="subtitle"><code>getDiagnostics()</code> explains what is stopping reminders on a user's phone, so you can tell them exactly what to change.</div>
+  <div class="cards">
+    <div class="card">
+      <h3>Send it to your backend</h3>
+<div class="code"><span class="k">const</span> d = <span class="k">await</span> CallReminder.getDiagnostics();
+<span class="c">// e.g. a realme phone after the user swiped the app away</span>
+{
+  manufacturer: <span class="s">'realme'</span>,
+  rom: { name: <span class="s">'realme UI'</span>, version: <span class="s">'V5.0'</span> },
+  forceStoppedRecently: <span class="t">true</span>,
+  exitReasons: [{ reason: <span class="s">'user_requested'</span>, … }],
+  permissions: {
+    notifications: <span class="s">'granted'</span>, fullScreenIntent: <span class="s">'granted'</span>,
+    batteryUsage: <span class="s">'restricted'</span>,
+    oemHasAutoStartManager: <span class="t">true</span>,
+  },
+  standbyBucket: <span class="s">'rare'</span>, interruptionFilter: <span class="s">'all'</span>,
+  notificationChannels: [{ id: <span class="s">'call_reminder_incoming'</span>,
+    importance: <span class="s">'high'</span>, blocked: <span class="n">false</span> }],
+  tts: { engine: <span class="s">'com.google.android.tts'</span>,
+         defaultLanguage: <span class="s">'hi-IN'</span> },
+}</div>
+    </div>
+    <div class="card">
+      <h3>…and turn it into fixes</h3>
+      <div class="finding"><span class="sev crit">CRITICAL</span><div><div class="ft">Phone force-stops the app when it's swiped away</div><div class="fd">Settings → Apps → App management → Battery usage → <b>Allow auto launch</b>, and lock the app in Recents. (<code>openAutoStartSettings()</code>)</div></div></div>
+      <div class="finding"><span class="sev warn">WARNING</span><div><div class="ft">Background usage is "Restricted"</div><div class="fd">Switch to Optimised or Unrestricted. (<code>openBatteryOptimizationSettings()</code>)</div></div></div>
+      <div class="finding"><span class="sev warn">WARNING</span><div><div class="ft">Rarely used — Android may delay pushes</div><div class="fd">Standby bucket <code>rare</code>; opening the app moves it back up.</div></div></div>
+      <div class="finding"><span class="sev ok">OK</span><div><div class="ft">Notifications, call channel, full-screen calls</div><div class="fd">All allowed — the call can ring and fill the screen.</div></div></div>
+      <div class="finding"><span class="sev ok">OK</span><div><div class="ft">Hindi voice available</div><div class="fd">Speech will use <code>hi-IN</code>.</div></div></div>
+    </div>
+  </div>
+  <div class="note">Illustrative. The findings panel is an example of what your admin UI can show; the library returns the raw data.</div>
+</div>
+</body></html>

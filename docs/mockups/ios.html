@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>iOS mockups</title><link rel="stylesheet" href="style.css">
+<style>
+  body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
+  .iphone .call { padding-top: 58px; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="pill" viewBox="0 0 24 24"><g transform="rotate(-45 12 12)"><rect x="2.5" y="7.5" width="19" height="9" rx="4.5" fill="#fff"/><path d="M12 7.5h5a4.5 4.5 0 010 9h-5z" fill="#cfe0ff"/></g></symbol>
+    <symbol id="end" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85a1 1 0 01-1.41-.01L.29 13.08a.96.96 0 010-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72a.96.96 0 010 1.39l-2.48 2.48a1 1 0 01-1.41.01 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></symbol>
+    <symbol id="call" viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.58a1 1 0 01-.25 1.01l-2.2 2.2z"/></symbol>
+    <symbol id="replay" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7z" fill="currentColor"/></symbol>
+    <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="canvas">
+  <div class="title">On iPhone</div>
+  <div class="subtitle">Time Sensitive notification → in-app call screen. No CallKit, no PushKit.</div>
+  <div class="row">
+    <div class="shot">
+      <div class="iphone"><div class="screen">
+        <div class="lock">
+          <div class="island"></div>
+          <div class="ios-status"><span>8:00</span><span>●●● ▮</span></div>
+          <div class="date">Wednesday 12 July</div>
+          <div class="clock">8:00</div>
+          <div class="ios-notif">
+            <div class="ts"><svg style="width:11px;height:11px"><use href="#clock"/></svg>TIME SENSITIVE</div>
+            <div class="row1"><div class="icon"><svg><use href="#pill"/></svg></div>
+              <div><div class="t">Acme Health · Medicine reminder</div><div class="b">Time for your 8:00 medicines</div></div></div>
+          </div>
+          <div class="ios-menu">
+            <div>Answer <svg style="color:#22a06b"><use href="#call" fill="#22a06b"/></svg></div>
+            <div>Decline <svg style="color:#d92d20"><use href="#x"/></svg></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>1 · Breaks through Focus</b><span>A Time Sensitive alert (or a Critical Alert, if Apple granted you the entitlement) with Answer / Decline.</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="iphone"><div class="screen">
+        <div class="island"></div>
+        <div class="ios-status"><span>8:00</span><span>●●● ▮</span></div>
+        <div class="call" style="padding-top:62px">
+          <div class="brand" style="font-weight:500;opacity:.75">Acme Health</div>
+          <div class="avatar-wrap" style="width:96px;height:96px;margin:18px 0 14px"><div class="avatar" style="width:84px;height:84px"><svg style="width:42px;height:42px"><use href="#pill"/></svg></div></div>
+          <div class="caller" style="font-size:24px">Acme Health</div>
+          <div class="ctitle">Medicine reminder</div>
+          <div class="timer">Speaking… · 00:03</div>
+          <div class="transcript">Hello Asha! It's time to <mark>inhale</mark> 2 puffs of Asthalin.</div>
+          <div class="spacer"></div>
+          <div class="actions"><div class="pill primary">I took it</div><div class="pill secondary">Remind me in 10 min</div></div>
+          <div class="mini-row">
+            <div class="mini"><div class="btn-round grey"><svg><use href="#replay"/></svg></div>Repeat</div>
+            <div class="mini"><div class="btn-round decline"><svg><use href="#end"/></svg></div>End call</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>2 · Answer opens the call screen</b><span>Spoken with AVSpeechSynthesizer — audible even with the silent switch on.</span></div>
+    </div>
+  </div>
+  <div class="note">Illustrative mockups. iOS 15.1+; the delegate is never replaced — you forward responses to <code>CallReminderNotifications</code>.</div>
+</div>
+</body></html>

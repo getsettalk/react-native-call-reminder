@@ -8,6 +8,7 @@ import { TurboModuleRegistry, type CodegenTypes, type TurboModule } from 'react-
 export interface Spec extends TurboModule {
   configure(config: CodegenTypes.UnsafeObject): Promise<void>;
   getPermissions(): Promise<CodegenTypes.UnsafeObject>;
+  getDiagnostics(): Promise<CodegenTypes.UnsafeObject>;
   requestNotificationPermission(criticalAlerts: boolean): Promise<string>;
   requestFullScreenIntentPermission(): Promise<string>;
   openExactAlarmSettings(): Promise<string>;

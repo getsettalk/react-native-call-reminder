@@ -78,6 +78,19 @@ class CallReminderModule(context: ReactApplicationContext) :
     promise.resolve(PermissionsHelper.snapshot(reactApplicationContext, reactApplicationContext.currentActivity))
   }
 
+  override fun getDiagnostics(promise: Promise) {
+    // Collected on a background thread: most probes are binder calls. Each probe
+    // falls back on its own, so only a truly unexpected failure rejects.
+    DiagnosticsCollector.collect(reactApplicationContext, reactApplicationContext.currentActivity) { result ->
+      result.fold(
+          onSuccess = { promise.resolve(it) },
+          onFailure = { error ->
+            Log.e(TAG, "getDiagnostics failed", error)
+            promise.reject(E_DIAGNOSTICS, error.message, error)
+          })
+    }
+  }
+
   override fun requestNotificationPermission(criticalAlerts: Boolean, promise: Promise) {
     val context = reactApplicationContext
     val current = PermissionsHelper.notifications(context, context.currentActivity)
@@ -406,5 +419,6 @@ class CallReminderModule(context: ReactApplicationContext) :
     private const val E_SHOW = "show_failed"
     private const val E_BUSY = "busy"
     private const val E_SPEECH = "speech_failed"
+    private const val E_DIAGNOSTICS = "diagnostics_failed"
   }
 }

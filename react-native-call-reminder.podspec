@@ -17,7 +17,8 @@ Pod::Spec.new do |s|
   # Required-reason API declarations (UserDefaults), merged into the app's privacy report.
   s.resource_bundles = { "react-native-call-reminder_privacy" => ["ios/PrivacyInfo.xcprivacy"] }
   s.swift_version = "5.9"
-  s.frameworks = "UIKit", "UserNotifications", "AVFoundation"
+  # LocalAuthentication: getDiagnostics().keyguardSecure (whether a passcode is set; never prompts).
+  s.frameworks = "UIKit", "UserNotifications", "AVFoundation", "LocalAuthentication"
 
   # The ObjC++ module imports the generated Swift interface (react_native_call_reminder-Swift.h).
   s.pod_target_xcconfig = {

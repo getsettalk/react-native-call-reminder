@@ -128,6 +128,17 @@ internal class SpeechEngine private constructor(private val appContext: Context)
     }
   }
 
+  /**
+   * The engine's default language (BCP-47) if the engine is already
+   * initialised — never starts it. For diagnostics.
+   */
+  fun defaultLanguageIfReady(): String? {
+    if (state != EngineState.READY) return null
+    @Suppress("DEPRECATION")
+    val locale = runCatching { tts?.defaultLanguage }.getOrNull() ?: return null
+    return locale.toLanguageTag().takeIf { it.isNotEmpty() && it != "und" }
+  }
+
   fun languages(callback: (List<String>) -> Unit) {
     withEngine { engine ->
       val locales =
@@ -402,6 +413,9 @@ internal class SpeechEngine private constructor(private val appContext: Context)
     const val AVAILABILITY_NOT_SUPPORTED = "not_supported"
 
     @Volatile private var instance: SpeechEngine? = null
+
+    /** The engine if this process already created it; never creates one. */
+    fun peek(): SpeechEngine? = instance
 
     fun get(context: Context): SpeechEngine =
         instance

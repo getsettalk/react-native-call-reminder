@@ -4,16 +4,29 @@ import type {
   CallAction,
   CallPresentation,
   CallReminderConfig,
+  CallReminderDiagnostics,
   CallReminderEvent,
   CallReminderEventType,
   CallReminderPermissions,
+  ChannelImportance,
   IncomingCallOptions,
+  InterruptionFilter,
+  IosAuthorizationStatus,
+  IosBackgroundRefresh,
+  IosDiagnostics,
+  IosNotificationSetting,
   LanguageAvailability,
+  LockscreenVisibility,
+  NotificationChannelInfo,
   PermissionState,
+  ProcessExitInfo,
+  ProcessExitReason,
+  ProcessImportance,
   RemoteActionRule,
   ShowIncomingCallResult,
   SpeakOptions,
   SpeakResult,
+  StandbyBucket,
 } from './types';
 
 /**
@@ -57,6 +70,91 @@ const LANGUAGE_AVAILABILITY: readonly LanguageAvailability[] = [
   'missing_data',
   'not_supported',
 ];
+const STANDBY_BUCKETS: readonly StandbyBucket[] = [
+  'exempted',
+  'active',
+  'working_set',
+  'frequent',
+  'rare',
+  'restricted',
+  'never',
+  'unknown',
+  'not_applicable',
+];
+const INTERRUPTION_FILTERS: readonly InterruptionFilter[] = [
+  'all',
+  'priority',
+  'alarms',
+  'none',
+  'unknown',
+  'not_applicable',
+];
+const CHANNEL_IMPORTANCE: readonly ChannelImportance[] = [
+  'none',
+  'min',
+  'low',
+  'default',
+  'high',
+  'max',
+  'unspecified',
+];
+const LOCKSCREEN_VISIBILITY: readonly LockscreenVisibility[] = [
+  'public',
+  'private',
+  'secret',
+  'no_override',
+  'unknown',
+];
+const EXIT_REASONS: readonly ProcessExitReason[] = [
+  'user_requested',
+  'user_stopped',
+  'crash',
+  'crash_native',
+  'anr',
+  'low_memory',
+  'signaled',
+  'excessive_resource_usage',
+  'dependency_died',
+  'permission_change',
+  'initialization_failure',
+  'freezer',
+  'package_state_change',
+  'package_updated',
+  'exit_self',
+  'other',
+  'unknown',
+];
+const PROCESS_IMPORTANCE: readonly ProcessImportance[] = [
+  'foreground',
+  'visible',
+  'perceptible',
+  'service',
+  'cached',
+  'gone',
+  'other',
+];
+const IOS_AUTHORIZATION: readonly IosAuthorizationStatus[] = [
+  'not_determined',
+  'denied',
+  'authorized',
+  'provisional',
+  'ephemeral',
+  'unknown',
+];
+const IOS_SETTINGS: readonly IosNotificationSetting[] = [
+  'enabled',
+  'disabled',
+  'not_supported',
+  'unknown',
+];
+const IOS_BACKGROUND_REFRESH: readonly IosBackgroundRefresh[] = [
+  'available',
+  'denied',
+  'restricted',
+  'unknown',
+];
+/** `ApplicationExitInfo` history is capped natively too; never trust a longer list. */
+const MAX_EXIT_REASONS = 10;
 const ACTION_STYLES = ['primary', 'secondary', 'destructive'] as const;
 const COLOR_PATTERN = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 // Loose BCP-47 shape check (language[-script][-region][-variant…]); the native
@@ -303,6 +401,7 @@ export function validateConfig(config: CallReminderConfig): CallReminderConfig {
     largeIcon: optionalString(config.largeIcon, 'largeIcon'),
     labels,
     answerGesture: optionalEnum(config.answerGesture, 'answerGesture', ['swipe', 'tap'] as const),
+    ringingStyle: optionalEnum(config.ringingStyle, 'ringingStyle', ['call', 'standard'] as const),
     defaultActions: validateActions(config.defaultActions, 'defaultActions'),
     ringAudioUsage: optionalEnum(config.ringAudioUsage, 'ringAudioUsage', [
       'alarm',
@@ -432,6 +531,126 @@ export function toPermissions(raw: unknown): CallReminderPermissions {
     criticalAlerts: toPermissionState(value.criticalAlerts),
     lockScreen: toPermissionState(value.lockScreen),
     allRequiredGranted: value.allRequiredGranted === true,
+  };
+}
+
+// --- Diagnostics -------------------------------------------------------------
+// Native output is trusted for nothing: unknown enum values become their
+// documented fallback, wrong types become null/false/[], so the result always
+// matches `CallReminderDiagnostics` and stays JSON-serialisable.
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function toChannel(raw: unknown): NotificationChannelInfo | null {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id === '') {
+    return null;
+  }
+  return {
+    id: raw.id,
+    name: typeof raw.name === 'string' ? raw.name : '',
+    importance: oneOf(raw.importance, CHANNEL_IMPORTANCE, 'unspecified'),
+    blocked: raw.blocked === true,
+    sound: raw.sound === true,
+    vibration: raw.vibration === true,
+    bypassDnd: raw.bypassDnd === true,
+    lockscreenVisibility: oneOf(raw.lockscreenVisibility, LOCKSCREEN_VISIBILITY, 'unknown'),
+  };
+}
+
+function toExitInfo(raw: unknown): ProcessExitInfo | null {
+  if (!isRecord(raw) || typeof raw.timestamp !== 'number' || !Number.isFinite(raw.timestamp)) {
+    return null;
+  }
+  return {
+    timestamp: raw.timestamp,
+    reason: oneOf(raw.reason, EXIT_REASONS, 'unknown'),
+    status: finiteOr(raw.status, 0),
+    importance: oneOf(raw.importance, PROCESS_IMPORTANCE, 'other'),
+    description: stringOrNull(raw.description),
+    processName: stringOrNull(raw.processName),
+  };
+}
+
+function toIosDiagnostics(raw: unknown): IosDiagnostics | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const settings = isRecord(raw.notificationSettings) ? raw.notificationSettings : {};
+  const setting = (key: string) => oneOf(settings[key], IOS_SETTINGS, 'unknown');
+  return {
+    lowPowerMode: raw.lowPowerMode === true,
+    backgroundRefresh: oneOf(raw.backgroundRefresh, IOS_BACKGROUND_REFRESH, 'unknown'),
+    notificationSettings: {
+      authorizationStatus: oneOf(settings.authorizationStatus, IOS_AUTHORIZATION, 'unknown'),
+      alertSetting: setting('alertSetting'),
+      soundSetting: setting('soundSetting'),
+      lockScreenSetting: setting('lockScreenSetting'),
+      notificationCenterSetting: setting('notificationCenterSetting'),
+      timeSensitiveSetting: setting('timeSensitiveSetting'),
+      criticalAlertSetting: setting('criticalAlertSetting'),
+      scheduledDeliverySetting: setting('scheduledDeliverySetting'),
+    },
+  };
+}
+
+export function toDiagnostics(raw: unknown): CallReminderDiagnostics {
+  const value = isRecord(raw) ? raw : {};
+  const platform = value.platform === 'ios' ? 'ios' : 'android';
+  const rom = isRecord(value.rom) ? value.rom : {};
+  const tts = isRecord(value.tts) ? value.tts : {};
+  const osVersion = typeof value.osVersion === 'string' ? value.osVersion : '';
+  const channels = Array.isArray(value.notificationChannels) ? value.notificationChannels : [];
+  const exits = Array.isArray(value.exitReasons) ? value.exitReasons : [];
+  return {
+    platform,
+    osVersion,
+    sdkInt: typeof value.sdkInt === 'number' && Number.isFinite(value.sdkInt) ? value.sdkInt : null,
+    manufacturer: typeof value.manufacturer === 'string' ? value.manufacturer : '',
+    brand: typeof value.brand === 'string' ? value.brand : '',
+    model: typeof value.model === 'string' ? value.model : '',
+    device: typeof value.device === 'string' ? value.device : '',
+    rom: {
+      name: stringOrNull(rom.name),
+      version: stringOrNull(rom.version),
+      display: stringOrNull(rom.display),
+    },
+    permissions: toPermissions(
+      isRecord(value.permissions) ? value.permissions : { platform, osVersion },
+    ),
+    standbyBucket: oneOf(value.standbyBucket, STANDBY_BUCKETS, 'unknown'),
+    powerSaveMode: value.powerSaveMode === true,
+    deviceIdle: value.deviceIdle === true,
+    interruptionFilter: oneOf(value.interruptionFilter, INTERRUPTION_FILTERS, 'unknown'),
+    dndAllowsAlarms: typeof value.dndAllowsAlarms === 'boolean' ? value.dndAllowsAlarms : null,
+    notificationChannels: channels
+      .map(toChannel)
+      .filter((channel): channel is NotificationChannelInfo => channel !== null),
+    appNotificationsEnabled: value.appNotificationsEnabled === true,
+    exitReasons: exits
+      .map(toExitInfo)
+      .filter((exit): exit is ProcessExitInfo => exit !== null)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, MAX_EXIT_REASONS),
+    forceStoppedRecently: value.forceStoppedRecently === true,
+    keyguardSecure: value.keyguardSecure === true,
+    tts: {
+      engine: stringOrNull(tts.engine),
+      defaultLanguage: stringOrNull(tts.defaultLanguage),
+    },
+    timezone: typeof value.timezone === 'string' ? value.timezone : '',
+    locale: typeof value.locale === 'string' ? value.locale : '',
+    ios: platform === 'ios' ? toIosDiagnostics(value.ios) : null,
+    collectedAt: finiteOr(value.collectedAt, Date.now()),
   };
 }
 

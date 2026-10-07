@@ -21,14 +21,26 @@ even if it was killed in the meantime.
   durable native queue first and delivered to JS live, through a headless task, or on the
   next launch.
 
-| Platform | Status in 0.1.0 |
+| Platform | Status |
 | --- | --- |
 | Android (API 24 – 36) | Production-tested end to end on a real FCM push: lock screen, background, killed process, full-screen denied, timeout, voice fallback. |
 | iOS (15.1+) | Implemented and code-reviewed, **not yet built or device-tested**. Treat as beta and test on a device before shipping. |
 
 0.2.0 adds swipe-to-answer on the call screen and the `batteryUsage` / `backgroundRestricted`
 permission fields (see [CHANGELOG](./CHANGELOG.md)); test the new call-screen gesture on your
-devices before shipping.
+devices before shipping. 0.3.0 adds [`getDiagnostics()`](#diagnostics): one call that explains
+why reminders might not reach a phone, for debugging users' devices remotely.
+
+## Screenshots
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/getsettalk/react-native-call-reminder-/main/docs/images/android.png" alt="Android: full-screen ringing call with swipe up to answer or decline, the answered screen speaking the reminder with I took it / Remind me later actions, and the heads-up fallback when full-screen is not allowed" width="900">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/getsettalk/react-native-call-reminder-/main/docs/images/ios.png" alt="iPhone: Time Sensitive notification with Answer and Decline on the lock screen, and the in-app call screen speaking the reminder" width="620">
+</p>
+
+<sub>Illustrative mockups rendered from HTML (<code>docs/mockups</code>, <code>scripts/render-mockups.sh</code>), not device captures. Your colours, icon, labels and actions come from <code>configure()</code> and <code>showIncomingCall()</code>.</sub>
 
 ---
 
@@ -87,6 +99,10 @@ after the user answers.
   (see [Recommended architecture](#recommended-architecture)).
 
 ## How it works
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/getsettalk/react-native-call-reminder-/main/docs/images/flow.png" alt="Flow: your server triggers at dose time, FCM/APNs delivers a high-priority push, showIncomingCall rings full screen or heads-up, the user answers and the reminder is spoken, then events are reported back to your app" width="900">
+</p>
 
 ```
                  ┌──────────────────────────── your trigger ────────────────────────────┐
@@ -320,6 +336,7 @@ await CallReminder.acknowledgeEvents(pending.map(e => e.id));
 | --- | --- | --- |
 | `configure(config)` | `Promise<void>` | Persisted natively; receivers and the call screen use it even when JS is not running. Call at start-up and after copy/colour changes. |
 | `getPermissions()` | `Promise<CallReminderPermissions>` | See below. |
+| `getDiagnostics()` | `Promise<CallReminderDiagnostics>` | Everything that can stop a call from reaching the device (permissions, battery/standby, DND, all notification channels, recent process deaths, OEM skin, TTS…). Read-only, needs no permission, never rejects for a field it cannot read. See [Diagnostics](#diagnostics). |
 | `requestNotificationPermission({ criticalAlerts? })` | `Promise<PermissionState>` | Android 13+: POST_NOTIFICATIONS prompt (needs a foreground activity, rejects with `no_activity` otherwise). iOS: alert/sound/badge, plus Critical Alerts when requested. |
 | `requestFullScreenIntentPermission()` | `Promise<PermissionState>` | Android 14+: opens *Full-screen notifications* for the app and resolves with the re-checked state when the user returns. Resolves immediately when already granted or not applicable (`granted` below Android 14, `not_applicable` on iOS). |
 | `openExactAlarmSettings()` | `Promise<PermissionState>` | Android 12+: *Alarms & reminders*. Same semantics: resolves immediately when already granted or `not_applicable` (below Android 12, or the app declares no exact-alarm permission), otherwise on return. |
@@ -402,6 +419,10 @@ settings before your `configure()` would linger in the system settings forever).
 
 ### `configure(config)`
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/getsettalk/react-native-call-reminder-/main/docs/images/customize.png" alt="The same call screen with default settings, with a teal brand and Hindi labels, and in tap mode with custom labels" width="860">
+</p>
+
 | Field | Default | |
 | --- | --- | --- |
 | `channelId`, `channelName`, `channelDescription` | `call_reminder_incoming`, "Reminder calls", … | Android channel. A channel's sound and vibration are fixed once created; use a new `channelId` to change them. |
@@ -414,6 +435,7 @@ settings before your `configure()` would linger in the system settings forever).
 | `smallIcon` | bell | Android drawable/mipmap name for the status bar. |
 | `largeIcon` | app icon | Android drawable/mipmap or iOS asset name for the avatar. |
 | `labels` | English | `answer`, `decline`, `incomingTitle`, `speaking`, `listening`, `ended`, `endCall`, `replay`, `tapToAnswer`, `swipeToAnswer` ("Swipe up to answer"), `swipeToDecline` ("Swipe up to decline"). |
+| `ringingStyle` | `'call'` | Android ringing notification template. `'call'`: Android's call-style notification (Answer/Decline pills, top of the shade) — from Android 14 the only ongoing notification users **can't swipe away**, so a ringing reminder can't be lost by an accidental swipe or "Clear all"; falls back to `'standard'` automatically if a device rejects it. `'standard'`: plain notification with two actions (ongoing, but swipeable on Android 14+). No effect on iOS, where notifications can always be dismissed. |
 | `answerGesture` | `'swipe'` | How the ringing call screen is answered/declined: `'swipe'` (drag the button up) or `'tap'` (the 0.1.x behaviour). See [Answering on the call screen](#answering-on-the-call-screen). |
 | `defaultActions` | none | Buttons shown after answering when a call has no `actions`. Up to 4. |
 | `duplicateWindowSeconds` | `60` | A second `showIncomingCall` with the same `callId` within this window is `suppressed`. |
@@ -494,6 +516,96 @@ buttons and unchanged. Use `answerGesture: 'tap'` to keep tap-to-answer.
 Speech events of a standalone `speak()` have an empty `callId` (and `payload.utteranceId`)
 and are delivered live only, never queued.
 
+## Diagnostics
+
+"My reminder call never rang" is almost always the phone, not your server: an OEM battery
+manager that force-stops the app when it is swiped out of Recents (realme, OPPO, OnePlus,
+Xiaomi, vivo…), a blocked channel, Do Not Disturb, a missing permission. `getDiagnostics()`
+collects everything the library can read about this in one JSON-serialisable object, so
+support can look at a user's phone **remotely**:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/getsettalk/react-native-call-reminder-/main/docs/images/diagnostics.png" alt="getDiagnostics output for a realme phone that force-stops the app, turned into findings: critical force-stop with the auto-launch fix, battery restricted warning, rarely-used warning, and OK checks" width="860">
+</p>
+
+```ts
+import CallReminder from 'react-native-call-reminder';
+
+// e.g. behind a "Send diagnostics" button on your Help screen
+export async function sendCallDiagnostics(): Promise<void> {
+  const diagnostics = await CallReminder.getDiagnostics();
+  await fetch('https://api.example.com/v1/support/call-diagnostics', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+    body: JSON.stringify({ appVersion: APP_VERSION, diagnostics }),
+  });
+}
+```
+
+You can also collect it from your FCM background handler when your server sends a
+"debug" data message to one consenting user — and if that message never answers, the
+app is most likely force-stopped right now (see `forceStoppedRecently`).
+
+A realme phone after an OEM "swipe kill" (abridged):
+
+```json
+{
+  "platform": "android", "osVersion": "14", "sdkInt": 34,
+  "manufacturer": "realme", "brand": "realme", "model": "RMX3686", "device": "RE58B2L1",
+  "rom": { "name": "realme UI", "version": "V5.0", "display": "RMX3686_14.0.0.600(EX01)" },
+  "permissions": { "notifications": "granted", "channel": "granted", "fullScreenIntent": "granted",
+                   "batteryUsage": "optimized", "oemHasAutoStartManager": true, "…": "…" },
+  "standbyBucket": "active", "powerSaveMode": false, "deviceIdle": false,
+  "interruptionFilter": "all", "dndAllowsAlarms": true,
+  "notificationChannels": [
+    { "id": "call_reminder_incoming", "name": "Reminder calls", "importance": "high", "blocked": false,
+      "sound": true, "vibration": true, "bypassDnd": false, "lockscreenVisibility": "public" }
+  ],
+  "appNotificationsEnabled": true,
+  "exitReasons": [
+    { "timestamp": 1767100000000, "reason": "user_requested", "status": 0, "importance": "cached",
+      "description": "stop com.example.app due to from pid 2786", "processName": "com.example.app" }
+  ],
+  "forceStoppedRecently": true, "keyguardSecure": true,
+  "tts": { "engine": "com.google.android.tts", "defaultLanguage": "hi-IN" },
+  "timezone": "Asia/Kolkata", "locale": "en-IN", "ios": null, "collectedAt": 1767200000000
+}
+```
+
+Every field is best-effort: whatever cannot be read on a device is `unknown`, `null`,
+`false` or `[]` — the promise does not reject because of it. Android collects on a
+background thread (a handful of quick system-service reads), needs no
+permission, never creates notification channels and never starts the TTS engine.
+
+| Field | What it is | When it is bad → what to tell the user |
+| --- | --- | --- |
+| `platform`, `osVersion`, `sdkInt`, `manufacturer`, `brand`, `model`, `device` | Device identity. `manufacturer` / `brand` lower-cased (`realme`, `xiaomi`, `redmi`…); iOS: `apple`, model identifier (`iPhone15,2`), `sdkInt` null. | — Pick the right OEM instructions from it. |
+| `rom` | Android OEM skin from system properties: `name` (`realme UI`, `ColorOS`, `OxygenOS`, `HyperOS`, `MIUI`, `OriginOS`, `Funtouch OS`, `MagicOS`, `Magic UI`, `HarmonyOS`, `EMUI`, `One UI`, `Flyme`, or null for stock-like Android), `version` as reported (`V5.0`, `OS2.0`, `6.1`), `display` = `Build.DISPLAY`. iOS: `display` is the OS build string. | ColorOS family, HyperOS/MIUI, OriginOS/Funtouch, EMUI/MagicOS: aggressive background killing — see [OEM notes](#oem-notes). |
+| `permissions` | Exactly what `getPermissions()` returns. | See [Permissions](#permissions): `notifications` → `requestNotificationPermission()`; `channel` → `openNotificationSettings()`; `fullScreenIntent` → `requestFullScreenIntentPermission()`; `batteryUsage: 'restricted'` → `openBatteryOptimizationSettings()`. |
+| `forceStoppedRecently` | Android: the app was force-stopped before the current process started — while stopped it gets **no** pushes, so nothing can ring. Android 15+: exact (`ApplicationStartInfo.wasForceStopped()`; the first launch after installing does not count). Android 11–14: inferred from the newest main-process death being `user_requested` / `user_stopped`. | `true` on realme / OPPO / OnePlus / Xiaomi / vivo / Huawei / Honor: *"Turn on **Auto launch / Autostart** for the app (`openAutoStartSettings()`), set its battery use to *Allow background activity / No restrictions*, and **lock the app in Recents** (open Recents, long-press or pull down on the app's card → Lock) so clearing Recents doesn't stop it."* Caveats: a deliberate Settings → *Force stop* looks the same, and on stock Android 11–14 (Pixel, Motorola…) swiping the app out of Recents also records `user_requested` without stopping it (harmless there). |
+| `exitReasons` | Android 11+: the app's last ≤ 10 process deaths, newest first: `timestamp`, `reason`, `status`, `importance` (state when it died), `description`, `processName`. | Repeated `user_requested` → as above. `low_memory` → the phone ran out of RAM: lock the app in Recents, close heavy apps. `crash` / `crash_native` / `anr` → your bug: check crash reports at that time. `excessive_resource_usage` / `freezer` → the system punished background work. `permission_change` → the user revoked a permission. |
+| `standbyBucket` | Android 9+ app standby bucket. Almost always `active` while the app is open — most telling when collected in the background. | `rare` / `restricted`: background work is deferred and high-priority pushes may be rationed. Ask the user to open the app now and then, and to set battery use to *Unrestricted* on aggressive OEMs. |
+| `powerSaveMode` | Android Battery Saver / iOS Low Power Mode is on. | OEM battery savers often hold back pushes: turn it off, or exempt the app. |
+| `deviceIdle` | Android: the device is in Doze right now (false while in use). | Informational: high-priority FCM still wakes the app in Doze. |
+| `interruptionFilter` | Android Do Not Disturb: `all` (off), `priority`, `alarms`, `none` (total silence). iOS: `not_applicable`. | `none` → *"Turn off Do Not Disturb, or use Priority only with alarms allowed."* `alarms` → calls ring (default `ringAudioUsage: 'alarm'`) but your ordinary reminder channels stay silent. |
+| `dndAllowsAlarms` | Android: whether DND lets **alarms** through — the policy in force while DND is on in priority mode, otherwise the user's DND settings (what happens once DND turns on). null if unreadable / iOS. | `false` (with `priority`) → *"In Do Not Disturb settings, allow Alarms"* — calls ring with alarm audio by default ([Do Not Disturb](#do-not-disturb)). |
+| `notificationChannels` | Android 8+: **all** of the app's channels (also your own reminder channels): `importance`, `blocked`, `sound`, `vibration`, `bypassDnd`, `lockscreenVisibility` (`no_override` = each notification decides). | `blocked` → *"Turn this notification category on"* (`openNotificationSettings(id)`). The call channel below `high` → it will not pop up or ring: set it back to *Urgent / Pop on screen*. A reminder channel at `low` / `min` or `sound: false` → silent. `secret` → hidden on the lock screen. |
+| `appNotificationsEnabled` | The app-wide notifications switch (iOS: authorized). | `false` → *"Allow notifications for the app."* |
+| `keyguardSecure` | A PIN / pattern / password (iOS: passcode) is set. | Informational: with `lockScreenPrivacy: 'private'` details show only after unlocking. |
+| `tts` | `engine`: the default TTS engine package (null = none installed; iOS `AVSpeechSynthesizer`); `defaultLanguage` where known. | `engine: null` → the call rings but cannot speak: install *Speech Services by Google*. Check the reminder language with `isLanguageAvailable()`. |
+| `timezone`, `locale` | IANA zone id (`Asia/Kolkata`) and BCP-47 locale. | Zone differs from the user's zone on your server → reminders ring at the wrong local time. |
+| `ios.lowPowerMode` | iOS Low Power Mode. | Informational: alert pushes still arrive. |
+| `ios.backgroundRefresh` | Background App Refresh: `available`, `denied`, `restricted`. | Does not block alert pushes; blocks background work for data-only pushes: *Settings → General → Background App Refresh.* |
+| `ios.notificationSettings` | Raw `UNNotificationSettings`: `authorizationStatus` (`authorized`, `provisional`, `denied`…) and `alert` / `sound` / `lockScreen` / `notificationCenter` / `timeSensitive` / `criticalAlert` / `scheduledDelivery` settings (`enabled`, `disabled`, `not_supported`). | `denied` → allow notifications. `alertSetting` / `soundSetting` `disabled` → turn on banners / sounds. `timeSensitiveSetting: 'disabled'` → turn on *Time Sensitive Notifications* (Focus can hold the call back otherwise). `scheduledDeliverySetting: 'enabled'` → the app is in the *Scheduled Summary*: switch it to *Immediate Delivery*. |
+| `collectedAt` | Device clock (epoch ms) when collected. | Far from your server's time → wrong device clock. |
+
+Privacy: the snapshot contains no personal identifiers (no IMEI, serial number,
+advertising ID, phone number or accounts), but device model, OS build, time zone, locale and
+channel names are device information. Send it only for support and with the user's
+knowledge, never use it to fingerprint or track, and declare it if you collect it (Google
+Play *Data safety*: App info and performance → Diagnostics / Crash logs; App Store privacy
+details: Diagnostics → Other Diagnostic Data).
+
 ## Android
 
 ### What the library adds to your manifest
@@ -552,6 +664,10 @@ process. Guide users through:
 
 On stock Android the battery setting only matters when it is *Restricted*
 (`batteryUsage === 'restricted'`, see [Battery usage](#battery-usage)).
+
+Whether a user's phone actually kills the app this way shows up in
+[`getDiagnostics()`](#diagnostics): `forceStoppedRecently`, `exitReasons` and `rom` (e.g.
+`realme UI`, `HyperOS`).
 
 `getPermissions().oemHasAutoStartManager` tells you whether such a screen exists.
 

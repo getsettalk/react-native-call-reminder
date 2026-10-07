@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Customisation mockups</title><link rel="stylesheet" href="style.css">
+<style>
+  .teal { --bg: #12332f; --accent: #0f766e; }
+  .plum { --bg: #241a33; --accent: #7c3aed; }
+  .snippet { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; background: #0f1720; color: #d6e2ee; border-radius: 10px; padding: 9px 11px; line-height: 1.55; width: 100%; white-space: pre; }
+  .snippet .s { color: #9fe3b5; } .snippet .k { color: #8fb8ff; }
+  .call .header, .btn-hint { font-family: inherit; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="pill" viewBox="0 0 24 24"><g transform="rotate(-45 12 12)"><rect x="2.5" y="7.5" width="19" height="9" rx="4.5" fill="#fff"/><path d="M12 7.5h5a4.5 4.5 0 010 9h-5z" fill="#cfe0ff"/></g></symbol>
+    <symbol id="heart" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.4 8.5 2.3 4.5 6.2 4.5c2.2 0 3.6 1.2 4.3 2.4h3c.7-1.2 2.1-2.4 4.3-2.4 3.9 0 5.8 4 4.2 7.2C19.5 16.4 12 21 12 21z" fill="#fff"/></symbol>
+    <symbol id="drop" viewBox="0 0 24 24"><path d="M12 2.5s-6.5 7.3-6.5 12a6.5 6.5 0 0013 0c0-4.7-6.5-12-6.5-12z" fill="#fff"/></symbol>
+    <symbol id="call" viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.58a1 1 0 01-.25 1.01l-2.2 2.2z"/></symbol>
+    <symbol id="end" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85a1 1 0 01-1.41-.01L.29 13.08a.96.96 0 010-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72a.96.96 0 010 1.39l-2.48 2.48a1 1 0 01-1.41.01 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="M6 12.5l6-6 6 6M6 18.5l6-6 6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="canvas">
+  <div class="title">Your brand, your language, your rules</div>
+  <div class="subtitle">Colours, icon, every label and the answer gesture come from <code>configure()</code> — nothing is hard-coded.</div>
+  <div class="row">
+    <div class="shot">
+      <div class="phone"><div class="screen">
+        <div class="punch"></div><div class="status"><span>8:00</span><span></span></div>
+        <div class="call">
+          <div class="header">Incoming reminder call</div><div class="brand">Acme Health</div>
+          <div class="avatar-wrap"><div class="ring"></div><div class="ring r2"></div><div class="avatar"><svg><use href="#pill"/></svg></div></div>
+          <div class="caller">Acme Health</div><div class="ctitle">Medicine reminder</div><div class="cbody">Time for your 8:00 medicines</div>
+          <div class="spacer"></div>
+          <div class="swipe-row">
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round decline"><svg><use href="#end"/></svg></div><div class="btn-label">Decline</div><div class="btn-hint">Swipe up to decline</div></div>
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round answer"><svg><use href="#call"/></svg></div><div class="btn-label">Answer</div><div class="btn-hint">Swipe up to answer</div></div>
+          </div>
+        </div><div class="navbar"></div>
+      </div></div>
+      <div class="snippet"><span class="k">configure</span>({ appName: <span class="s">'Acme Health'</span> })</div>
+      <div class="caption"><b>Defaults</b><span>English labels, swipe to answer</span></div>
+    </div>
+
+    <div class="shot teal">
+      <div class="phone"><div class="screen">
+        <div class="punch"></div><div class="status"><span>8:00</span><span></span></div>
+        <div class="call">
+          <div class="header">दवा का रिमाइंडर कॉल</div><div class="brand">Sehat Saathi</div>
+          <div class="avatar-wrap"><div class="ring"></div><div class="ring r2"></div><div class="avatar"><svg><use href="#heart"/></svg></div></div>
+          <div class="caller">Sehat Saathi</div><div class="ctitle">दवा का समय</div><div class="cbody">सुबह 8:00 बजे की दवाइयाँ</div>
+          <div class="spacer"></div>
+          <div class="swipe-row">
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round decline"><svg><use href="#end"/></svg></div><div class="btn-label">अस्वीकार करें</div><div class="btn-hint">ऊपर खिसकाएँ</div></div>
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round answer"><svg><use href="#call"/></svg></div><div class="btn-label">जवाब दें</div><div class="btn-hint">ऊपर खिसकाएँ</div></div>
+          </div>
+        </div><div class="navbar"></div>
+      </div></div>
+      <div class="snippet">accentColor: <span class="s">'#0F766E'</span>,
+labels: { answer: <span class="s">'जवाब दें'</span>, … }</div>
+      <div class="caption"><b>Brand + any language</b><span>Speech follows <code>language</code> with a fallback voice</span></div>
+    </div>
+
+    <div class="shot plum">
+      <div class="phone"><div class="screen">
+        <div class="punch"></div><div class="status"><span>8:00</span><span></span></div>
+        <div class="call">
+          <div class="header">Incoming reminder call</div><div class="brand">DropCare</div>
+          <div class="avatar-wrap"><div class="ring"></div><div class="ring r2"></div><div class="avatar"><svg><use href="#drop"/></svg></div></div>
+          <div class="caller">DropCare</div><div class="ctitle">Eye drops</div><div class="cbody">2 drops in your left eye</div>
+          <div class="spacer"></div>
+          <div class="swipe-row" style="margin-bottom:22px">
+            <div class="swipe"><div class="btn-round decline"><svg><use href="#end"/></svg></div><div class="btn-label">Not now</div></div>
+            <div class="swipe"><div class="btn-round answer"><svg><use href="#call"/></svg></div><div class="btn-label">Listen</div></div>
+          </div>
+        </div><div class="navbar"></div>
+      </div></div>
+      <div class="snippet">answerGesture: <span class="s">'tap'</span>,
+labels: { decline: <span class="s">'Not now'</span> }</div>
+      <div class="caption"><b>Tap mode</b><span>Classic buttons if you prefer them</span></div>
+    </div>
+  </div>
+  <div class="note">Illustrative mockups.</div>
+</div>
+</body></html>

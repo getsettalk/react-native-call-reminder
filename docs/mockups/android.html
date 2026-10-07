@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Android mockups</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="pill" viewBox="0 0 24 24"><g transform="rotate(-45 12 12)"><rect x="2.5" y="7.5" width="19" height="9" rx="4.5" fill="#fff"/><path d="M12 7.5h5a4.5 4.5 0 010 9h-5z" fill="#cfe0ff"/></g></symbol>
+    <symbol id="call" viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.58a1 1 0 01-.25 1.01l-2.2 2.2z"/></symbol>
+    <symbol id="end" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85a1 1 0 01-1.41-.01L.29 13.08a.96.96 0 010-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72a.96.96 0 010 1.39l-2.48 2.48a1 1 0 01-1.41.01 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="M6 12.5l6-6 6 6M6 18.5l6-6 6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="replay" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></symbol>
+    <symbol id="wifi" viewBox="0 0 24 24"><path d="M12 20l3.5-4.2a5 5 0 00-7 0zm-6.4-7.6l1.9 2.3a7 7 0 019 0l1.9-2.3a10 10 0 00-12.8 0zM1.7 7.8l1.9 2.3a13 13 0 0116.8 0l1.9-2.3a16 16 0 00-20.6 0z"/></symbol>
+    <symbol id="sig" viewBox="0 0 24 24"><path d="M3 20h3v-4H3zm5 0h3v-8H8zm5 0h3V8h-3zm5 0h3V4h-3z"/></symbol>
+    <symbol id="bat" viewBox="0 0 24 24"><path d="M3 7h16a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1zm18 3h1v4h-1z"/></symbol>
+  </defs>
+</svg>
+
+<div class="canvas">
+  <div class="title">react-native-call-reminder</div>
+  <div class="subtitle">Reminders that ring like a phone call — and stay within Google Play &amp; App Store rules</div>
+
+  <div class="row">
+    <!-- 1. ringing -->
+    <div class="shot">
+      <div class="phone"><div class="screen">
+        <div class="punch"></div>
+        <div class="status"><span>8:00</span><span class="icons"><svg><use href="#sig"/></svg><svg><use href="#wifi"/></svg><svg><use href="#bat"/></svg></span></div>
+        <div class="call">
+          <div class="header">Incoming reminder call</div>
+          <div class="brand">Acme Health</div>
+          <div class="avatar-wrap"><div class="ring"></div><div class="ring r2"></div><div class="avatar"><svg><use href="#pill"/></svg></div></div>
+          <div class="caller">Acme Health</div>
+          <div class="ctitle">Medicine reminder</div>
+          <div class="cbody">Time for your 8:00 medicines</div>
+          <div class="spacer"></div>
+          <div class="swipe-row">
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round decline"><svg><use href="#end"/></svg></div><div class="btn-label">Decline</div><div class="btn-hint">Swipe up to decline</div></div>
+            <div class="swipe"><div class="chev"><svg><use href="#chev"/></svg></div><div class="btn-round answer"><svg><use href="#call"/></svg></div><div class="btn-label">Answer</div><div class="btn-hint">Swipe up to answer</div></div>
+          </div>
+        </div>
+        <div class="navbar"></div>
+      </div></div>
+      <div class="caption"><b>1 · It rings full screen</b><span>Even over the lock screen. Swipe up to answer or decline — a tap never answers.</span></div>
+    </div>
+
+    <!-- 2. speaking -->
+    <div class="shot">
+      <div class="phone"><div class="screen">
+        <div class="punch"></div>
+        <div class="status"><span>8:00</span><span class="icons"><svg><use href="#sig"/></svg><svg><use href="#wifi"/></svg><svg><use href="#bat"/></svg></span></div>
+        <div class="call" style="padding-top:44px">
+          <div class="brand" style="font-weight:500;opacity:.75">Acme Health</div>
+          <div class="avatar-wrap" style="width:96px;height:96px;margin:18px 0 14px"><div class="avatar" style="width:84px;height:84px"><svg style="width:42px;height:42px"><use href="#pill"/></svg></div></div>
+          <div class="caller" style="font-size:24px">Acme Health</div>
+          <div class="ctitle">Medicine reminder</div>
+          <div class="timer">Speaking… · 00:04</div>
+          <div class="transcript">Hello Asha! It's time to take 1 tablet of <mark>Metformin</mark> and put 2 drops of Refresh in your left eye.</div>
+          <div class="spacer"></div>
+          <div class="actions"><div class="pill primary">I took it</div><div class="pill secondary">Remind me in 10 min</div></div>
+          <div class="mini-row">
+            <div class="mini"><div class="btn-round grey"><svg><use href="#replay"/></svg></div>Repeat</div>
+            <div class="mini"><div class="btn-round decline"><svg><use href="#end"/></svg></div>End call</div>
+          </div>
+        </div>
+        <div class="navbar"></div>
+      </div></div>
+      <div class="caption"><b>2 · Answer → it speaks</b><span>The device's text-to-speech reads the reminder in the user's language, then your actions.</span></div>
+    </div>
+
+    <!-- 3. heads-up fallback -->
+    <div class="shot">
+      <div class="phone"><div class="screen">
+        <div class="home"></div>
+        <div class="punch"></div>
+        <div class="status"><span>8:00</span><span class="icons"><svg><use href="#sig"/></svg><svg><use href="#wifi"/></svg><svg><use href="#bat"/></svg></span></div>
+        <div class="headsup">
+          <div class="hu-top"><div class="hu-icon"><svg><use href="#pill"/></svg></div>Acme Health · now · 🔔</div>
+          <div class="hu-title">Medicine reminder</div>
+          <div class="hu-body">Time for your 8:00 medicines</div>
+          <div class="hu-actions"><div>Decline</div><div class="ans">Answer</div></div>
+        </div>
+        <div class="chip-note">Full-screen permission not granted (Android 14+)? The call still rings as a sticky heads-up — Answer opens the call screen.</div>
+        <div class="apps"><div class="app"></div><div class="app"></div><div class="app"></div><div class="app"></div><div class="app"></div><div class="app"></div><div class="app"></div><div class="app"></div></div>
+        <div class="search"></div>
+        <div class="navbar"></div>
+      </div></div>
+      <div class="caption"><b>3 · Graceful fallback</b><span>No permission, phone in use or on another call — it degrades instead of failing.</span></div>
+    </div>
+  </div>
+  <div class="note">Illustrative mockups. Colours, labels, icon and actions all come from <code>configure()</code> / <code>showIncomingCall()</code>.</div>
+</div>
+</body></html>

@@ -55,6 +55,22 @@ internal enum class AnswerGesture(val key: String) {
 }
 
 /**
+ * `configure({ ringingStyle })`: the template of the ringing notification.
+ * CALL uses Android's call-style template (Answer/Decline pills, top of the
+ * shade) which, from Android 14, is the only kind of ongoing notification the
+ * user cannot swipe away — so a ringing reminder can't be lost by an accidental
+ * swipe or "Clear all". STANDARD keeps a plain notification with two actions.
+ */
+internal enum class RingingStyle(val key: String) {
+  CALL("call"),
+  STANDARD("standard");
+
+  companion object {
+    fun from(key: String?) = entries.firstOrNull { it.key == key } ?: CALL
+  }
+}
+
+/**
  * Host-app configuration (`configure()` in JS). Persisted as the raw JSON the
  * app sent and parsed with defaults, so adding a field never breaks an older
  * stored config.
@@ -73,6 +89,7 @@ internal class CallReminderConfig private constructor(private val json: JSONObje
   val ringUsage: RingUsage = RingUsage.from(json.optStringOrNull("ringAudioUsage"))
   val speechUsage: SpeechUsage = SpeechUsage.from(json.optStringOrNull("speechAudioUsage"))
   val answerGesture: AnswerGesture = AnswerGesture.from(json.optStringOrNull("answerGesture"))
+  val ringingStyle: RingingStyle = RingingStyle.from(json.optStringOrNull("ringingStyle"))
   val duplicateWindowMs: Long =
       json.optDouble("duplicateWindowSeconds", DEFAULT_DUPLICATE_WINDOW_S).toLong().coerceIn(0, 86_400) * 1000
   val idleTimeoutMs: Long =

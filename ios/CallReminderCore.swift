@@ -108,6 +108,13 @@ public final class CallReminderCore: NSObject {
     }
   }
 
+  @objc(getDiagnostics:)
+  public func getDiagnostics(_ resolve: @escaping Resolve) {
+    center.getNotificationSettings { settings in
+      DispatchQueue.main.async { resolve(CallReminderDiagnostics.snapshot(settings)) }
+    }
+  }
+
   @objc(requestNotificationPermission:resolve:)
   public func requestNotificationPermission(_ criticalAlerts: Bool, resolve: @escaping Resolve) {
     var options: UNAuthorizationOptions = [.alert, .sound, .badge]

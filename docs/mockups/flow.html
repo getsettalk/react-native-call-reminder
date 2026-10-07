@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Flow</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="arr" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+<div class="canvas">
+  <div class="title">How a reminder call flows</div>
+  <div class="subtitle">You decide <i>when</i> to ring; the library rings, speaks and reports back — without ever losing an event.</div>
+  <div class="flow">
+    <div class="node"><div class="k">1 · Trigger</div><div class="h">Your server</div><div class="d">A cron finds doses due now (user's timezone) and sends one call per user.</div></div>
+    <div class="arrow"><svg><use href="#arr"/></svg></div>
+    <div class="node"><div class="k">2 · Push</div><div class="h">FCM / APNs</div><div class="d">Android: high-priority <b>data</b> message, short TTL. iOS: <b>time-sensitive</b> alert + category.</div></div>
+    <div class="arrow"><svg><use href="#arr"/></svg></div>
+    <div class="node"><div class="k">3 · Ring</div><div class="h"><code>showIncomingCall()</code></div><div class="d">Insistent alarm-category notification → full-screen call screen, or heads-up.</div></div>
+    <div class="arrow"><svg><use href="#arr"/></svg></div>
+    <div class="node"><div class="k">4 · Speak</div><div class="h">User answers</div><div class="d">Ringing stops; device TTS reads <code>speakText</code> in <code>language</code> (fallback voice + text).</div></div>
+    <div class="arrow"><svg><use href="#arr"/></svg></div>
+    <div class="node"><div class="k">5 · Report</div><div class="h">Events → you</div><div class="d"><code>answered</code>, <code>action: taken</code>, <code>timeout</code>… via listener, headless task or the durable queue.</div></div>
+  </div>
+  <div class="branches">
+    <div class="branch"><span class="dot" style="background:#f59e0b"></span><span>No answer → <code>timeout</code>, even after process death</span></div>
+    <div class="branch"><span class="dot" style="background:#3b82f6"></span><span>Full-screen denied → sticky heads-up</span></div>
+    <div class="branch"><span class="dot" style="background:#8b5cf6"></span><span>On a phone call → quiet notification</span></div>
+    <div class="branch"><span class="dot" style="background:#10b981"></span><span>Same <code>callId</code> twice → suppressed</span></div>
+  </div>
+</div>
+</body></html>

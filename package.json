@@ -1,6 +1,6 @@
 {
   "name": "react-native-call-reminder",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Store-compliant, call-style reminders for React Native: a full-screen incoming-call screen on Android, Time Sensitive notifications on iOS, and spoken reminders via the device text-to-speech engine.",
   "main": "./lib/module/index.js",
   "module": "./lib/module/index.js",

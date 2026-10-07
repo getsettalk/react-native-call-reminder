@@ -9,6 +9,7 @@ const mockPlatform = { OS: 'android' as 'android' | 'ios' };
 const mockNative = {
   configure: jest.fn(async () => undefined),
   getPermissions: jest.fn(),
+  getDiagnostics: jest.fn(),
   requestNotificationPermission: jest.fn(async () => 'granted'),
   requestFullScreenIntentPermission: jest.fn(async () => 'denied'),
   openExactAlarmSettings: jest.fn(async () => 'granted'),
@@ -215,6 +216,13 @@ describe('validation', () => {
     });
   });
 
+  it('validates the ringing style', async () => {
+    const api = load();
+    await expect(api.configure({ ringingStyle: 'fancy' as unknown as 'call' })).rejects.toThrow(/ringingStyle/);
+    await api.configure({ ringingStyle: 'standard' });
+    expect(mockNative.configure).toHaveBeenLastCalledWith({ ringingStyle: 'standard' });
+  });
+
   it('validates the answer gesture and passes the swipe labels through', async () => {
     const api = load();
     await expect(
@@ -351,5 +359,263 @@ describe('speech', () => {
     );
     mockNative.isLanguageAvailable.mockResolvedValue('weird');
     await expect(api.isLanguageAvailable('hi-IN')).resolves.toBe('not_supported');
+  });
+});
+
+describe('diagnostics', () => {
+  // What a realme phone (realme UI, Android 14) reports after an OEM swipe kill.
+  const realme = {
+    platform: 'android',
+    osVersion: '14',
+    sdkInt: 34,
+    manufacturer: 'realme',
+    brand: 'realme',
+    model: 'RMX3686',
+    device: 'RE58B2L1',
+    rom: { name: 'realme UI', version: 'V5.0', display: 'RMX3686_14.0.0.600(EX01)' },
+    permissions: {
+      platform: 'android',
+      osVersion: '14',
+      sdkInt: 34,
+      manufacturer: 'realme',
+      notifications: 'granted',
+      channel: 'granted',
+      fullScreenIntent: 'granted',
+      exactAlarm: 'not_applicable',
+      batteryOptimization: 'granted',
+      batteryUsage: 'optimized',
+      backgroundRestricted: false,
+      autoStart: 'unknown',
+      oemHasAutoStartManager: true,
+      timeSensitive: 'not_applicable',
+      criticalAlerts: 'not_applicable',
+      lockScreen: 'granted',
+      allRequiredGranted: true,
+    },
+    standbyBucket: 'active',
+    powerSaveMode: false,
+    deviceIdle: false,
+    interruptionFilter: 'all',
+    dndAllowsAlarms: true,
+    notificationChannels: [
+      {
+        id: 'call_reminder_incoming',
+        name: 'Reminder calls',
+        importance: 'high',
+        blocked: false,
+        sound: true,
+        vibration: true,
+        bypassDnd: false,
+        lockscreenVisibility: 'public',
+      },
+      {
+        id: 'reminders',
+        name: 'Medicine reminders',
+        importance: 'none',
+        blocked: true,
+        sound: true,
+        vibration: true,
+        bypassDnd: false,
+        lockscreenVisibility: 'no_override',
+      },
+    ],
+    appNotificationsEnabled: true,
+    exitReasons: [
+      {
+        timestamp: 1_767_000_000_000,
+        reason: 'low_memory',
+        status: 0,
+        importance: 'cached',
+        description: null,
+        processName: 'com.example.app',
+      },
+      {
+        timestamp: 1_767_100_000_000,
+        reason: 'user_requested',
+        status: 0,
+        importance: 'cached',
+        description: 'stop com.example.app due to from pid 2786',
+        processName: 'com.example.app',
+      },
+    ],
+    forceStoppedRecently: true,
+    keyguardSecure: true,
+    tts: { engine: 'com.google.android.tts', defaultLanguage: 'hi-IN' },
+    timezone: 'Asia/Kolkata',
+    locale: 'en-IN',
+    ios: null,
+    collectedAt: 1_767_200_000_000,
+  };
+
+  it('passes a well-formed Android snapshot through, newest exit first', async () => {
+    const api = load();
+    mockNative.getDiagnostics.mockResolvedValueOnce(realme);
+    const diagnostics = await api.getDiagnostics();
+    expect(diagnostics).toEqual({
+      ...realme,
+      exitReasons: [realme.exitReasons[1], realme.exitReasons[0]],
+    });
+    expect(diagnostics.permissions.oemHasAutoStartManager).toBe(true);
+    // Plain JSON, ready for a backend: nothing is lost in a round trip.
+    expect(JSON.parse(JSON.stringify(diagnostics))).toEqual(diagnostics);
+  });
+
+  it('coerces unknown or malformed native values instead of failing', async () => {
+    const api = load();
+    mockNative.getDiagnostics.mockResolvedValueOnce({
+      ...realme,
+      sdkInt: '34',
+      rom: { name: '', version: 5, display: 'X' },
+      standbyBucket: 'sleepy',
+      interruptionFilter: 7,
+      dndAllowsAlarms: 'yes',
+      powerSaveMode: 'true',
+      notificationChannels: [
+        { id: 'a', name: 7, importance: 'urgent', lockscreenVisibility: 'hidden', blocked: 1 },
+        { name: 'no id' },
+        'junk',
+      ],
+      exitReasons: [
+        ...Array.from({ length: 12 }, (_, i) => ({
+          timestamp: 1_000 + i,
+          reason: i === 11 ? 'zapped' : 'anr',
+          status: 'x',
+          importance: 'background',
+        })),
+        { timestamp: 'never', reason: 'crash' },
+      ],
+      tts: 'google',
+      ios: { lowPowerMode: true },
+    });
+    const diagnostics = await api.getDiagnostics();
+    expect(diagnostics.sdkInt).toBeNull();
+    expect(diagnostics.rom).toEqual({ name: null, version: null, display: 'X' });
+    expect(diagnostics.standbyBucket).toBe('unknown');
+    expect(diagnostics.interruptionFilter).toBe('unknown');
+    expect(diagnostics.dndAllowsAlarms).toBeNull();
+    expect(diagnostics.powerSaveMode).toBe(false);
+    expect(diagnostics.notificationChannels).toEqual([
+      {
+        id: 'a',
+        name: '',
+        importance: 'unspecified',
+        blocked: false,
+        sound: false,
+        vibration: false,
+        bypassDnd: false,
+        lockscreenVisibility: 'unknown',
+      },
+    ]);
+    expect(diagnostics.exitReasons).toHaveLength(10);
+    expect(diagnostics.exitReasons[0]).toEqual({
+      timestamp: 1_011,
+      reason: 'unknown',
+      status: 0,
+      importance: 'other',
+      description: null,
+      processName: null,
+    });
+    expect(diagnostics.tts).toEqual({ engine: null, defaultLanguage: null });
+    // The iOS block only exists on iOS.
+    expect(diagnostics.ios).toBeNull();
+  });
+
+  it('normalises an iOS snapshot', async () => {
+    mockPlatform.OS = 'ios';
+    const api = load();
+    mockNative.getDiagnostics.mockResolvedValueOnce({
+      platform: 'ios',
+      osVersion: '18.0',
+      sdkInt: null,
+      manufacturer: 'apple',
+      brand: 'apple',
+      model: 'iPhone15,2',
+      device: 'iPhone',
+      rom: { name: null, version: null, display: 'Version 18.0 (Build 22A3354)' },
+      permissions: { platform: 'ios', osVersion: '18.0', notifications: 'granted' },
+      standbyBucket: 'not_applicable',
+      powerSaveMode: true,
+      deviceIdle: false,
+      interruptionFilter: 'not_applicable',
+      dndAllowsAlarms: null,
+      notificationChannels: [],
+      appNotificationsEnabled: true,
+      exitReasons: [],
+      forceStoppedRecently: false,
+      keyguardSecure: true,
+      tts: { engine: 'AVSpeechSynthesizer', defaultLanguage: 'en-IN' },
+      timezone: 'Asia/Kolkata',
+      locale: 'en-IN',
+      ios: {
+        lowPowerMode: true,
+        backgroundRefresh: 'denied',
+        notificationSettings: {
+          authorizationStatus: 'authorized',
+          alertSetting: 'enabled',
+          soundSetting: 'enabled',
+          lockScreenSetting: 'enabled',
+          notificationCenterSetting: 'enabled',
+          timeSensitiveSetting: 'disabled',
+          criticalAlertSetting: 'not_supported',
+          scheduledDeliverySetting: 'mystery',
+        },
+      },
+      collectedAt: 1_767_200_000_000,
+    });
+    const diagnostics = await api.getDiagnostics();
+    expect(diagnostics.platform).toBe('ios');
+    expect(diagnostics.sdkInt).toBeNull();
+    expect(diagnostics.permissions.platform).toBe('ios');
+    expect(diagnostics.permissions.timeSensitive).toBe('unknown');
+    expect(diagnostics.standbyBucket).toBe('not_applicable');
+    expect(diagnostics.ios).toEqual({
+      lowPowerMode: true,
+      backgroundRefresh: 'denied',
+      notificationSettings: {
+        authorizationStatus: 'authorized',
+        alertSetting: 'enabled',
+        soundSetting: 'enabled',
+        lockScreenSetting: 'enabled',
+        notificationCenterSetting: 'enabled',
+        timeSensitiveSetting: 'disabled',
+        criticalAlertSetting: 'not_supported',
+        scheduledDeliverySetting: 'unknown',
+      },
+    });
+  });
+
+  it('never throws on an empty or non-object native result', async () => {
+    const api = load();
+    mockNative.getDiagnostics.mockResolvedValueOnce(null);
+    const diagnostics = await api.getDiagnostics();
+    expect(diagnostics).toMatchObject({
+      platform: 'android',
+      osVersion: '',
+      sdkInt: null,
+      rom: { name: null, version: null, display: null },
+      standbyBucket: 'unknown',
+      interruptionFilter: 'unknown',
+      dndAllowsAlarms: null,
+      notificationChannels: [],
+      exitReasons: [],
+      forceStoppedRecently: false,
+      ios: null,
+    });
+    expect(diagnostics.permissions.notifications).toBe('unknown');
+    expect(typeof diagnostics.collectedAt).toBe('number');
+  });
+});
+
+describe('jest mock', () => {
+  it('mocks every public function, and getDiagnostics resolves a normalised snapshot', async () => {
+    const api = load();
+    const mock = require('../../jest/mock') as {
+      default: Record<string, unknown>;
+      getDiagnostics: () => Promise<unknown>;
+    };
+    expect(Object.keys(mock.default).sort()).toEqual(Object.keys(api.default).sort());
+    mockNative.getDiagnostics.mockResolvedValueOnce(await mock.getDiagnostics());
+    const normalised = await api.getDiagnostics();
+    expect(normalised).toEqual(await mock.getDiagnostics());
   });
 });

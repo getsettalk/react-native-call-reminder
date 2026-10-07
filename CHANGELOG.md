@@ -4,6 +4,58 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-07
+
+### Added
+
+- `configure({ ringingStyle: 'call' | 'standard' })` (default `'call'`): the Android ringing
+  notification now uses the call-style template (Answer/Decline pills, ranked at the top of
+  the shade). From Android 14 that is the only kind of ongoing notification users can't swipe
+  away, so a ringing reminder can no longer be lost by an accidental swipe; it is also flagged
+  `FLAG_NO_CLEAR` so "Clear all" never removes it. Devices that reject a call-style
+  notification fall back to the standard template automatically.
+
+- `getDiagnostics(): Promise<CallReminderDiagnostics>`: one read-only snapshot of everything
+  that can keep a reminder call from reaching the device, for debugging users' phones
+  remotely (send it to your backend). Fields: `platform`, `osVersion`, `sdkInt`,
+  `manufacturer`, `brand`, `model`, `device`, `rom` (OEM skin), `permissions` (the
+  `getPermissions()` object), `standbyBucket`, `powerSaveMode`, `deviceIdle`,
+  `interruptionFilter`, `dndAllowsAlarms`, `notificationChannels` (all of the app's
+  channels), `appNotificationsEnabled`, `exitReasons`, `forceStoppedRecently`,
+  `keyguardSecure`, `tts`, `timezone`, `locale`, `ios` and `collectedAt`. Every field is
+  best-effort (`unknown` / `null` / `false` / `[]` when it cannot be read); the promise only
+  rejects (`diagnostics_failed`) on a truly unexpected error. README → *Diagnostics* explains
+  every field and what to tell the user when it is bad.
+- Exported types: `CallReminderDiagnostics`, `RomInfo`, `StandbyBucket`, `InterruptionFilter`,
+  `NotificationChannelInfo`, `ChannelImportance`, `LockscreenVisibility`, `ProcessExitInfo`,
+  `ProcessExitReason`, `ProcessImportance`, `TtsInfo`, `IosDiagnostics`,
+  `IosNotificationSettings`, `IosAuthorizationStatus`, `IosNotificationSetting`,
+  `IosBackgroundRefresh`.
+- Android: collected on a background thread. OEM skin detection (realme UI, ColorOS,
+  OxygenOS, HyperOS, MIUI, OriginOS, Funtouch OS, MagicOS / Magic UI, HarmonyOS, EMUI,
+  One UI, Flyme) reads system properties through `android.os.SystemProperties` by
+  reflection, guarded, falling back to `Build.DISPLAY`. Process deaths come from
+  `ActivityManager.getHistoricalProcessExitReasons()` (Android 11+, reasons mapped by value
+  up to `REASON_PACKAGE_UPDATED`); `forceStoppedRecently` is exact on Android 15+
+  (`ApplicationStartInfo.wasForceStopped()`, ignoring the first launch after installation)
+  and inferred from the newest main-process exit
+  (`user_requested` / `user_stopped`) on Android 11–14. The TTS engine is read from the
+  system setting / installed engines without starting it. No new permissions or manifest
+  entries; notification channels are never created.
+- iOS: notification settings, Low Power Mode, Background App Refresh, model identifier and
+  passcode state. The pod now links `LocalAuthentication` (only `canEvaluatePolicy`, which
+  never prompts and needs no Face ID usage description). No new required-reason APIs; the
+  privacy manifest is unchanged.
+- Jest mock: `getDiagnostics` resolves a healthy Android snapshot.
+
+### Documentation
+
+- README screenshots: illustrative mockups of the Android call screen (ringing, speaking,
+  heads-up fallback), iOS (Time Sensitive notification, in-app call screen), customisation,
+  the call flow and diagnostics. Sources in `docs/mockups/`, rendered with
+  `scripts/render-mockups.sh`; not part of the npm package.
+
+
 ## [0.2.0] - 2026-10-01
 
 ### Added

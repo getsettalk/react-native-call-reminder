@@ -81,6 +81,263 @@ export interface CallReminderPermissions {
   allRequiredGranted: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Diagnostics (`getDiagnostics()`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Android 9+ app standby bucket of this app (`UsageStatsManager.getAppStandbyBucket()`):
+ * how often the system lets it run jobs and alarms in the background. While the app is
+ * open it is almost always `active`; the value is most telling when collected in the
+ * background (e.g. from a push handler).
+ * - `exempted`: exempt from standby (system / allow-listed apps).
+ * - `restricted` (Android 11+): the strictest bucket; background work is heavily limited.
+ * - `never`: the app has never been used since installation.
+ * - `unknown`: could not be read or a value Android did not document.
+ * - `not_applicable`: below Android 9 and on iOS.
+ */
+export type StandbyBucket =
+  | 'exempted'
+  | 'active'
+  | 'working_set'
+  | 'frequent'
+  | 'rare'
+  | 'restricted'
+  | 'never'
+  | 'unknown'
+  | 'not_applicable';
+
+/**
+ * Android Do Not Disturb state (`NotificationManager.getCurrentInterruptionFilter()`):
+ * `all` = DND off, `priority` = priority only, `alarms` = alarms only, `none` = total
+ * silence. `not_applicable` on iOS (Focus cannot be read without an entitlement).
+ */
+export type InterruptionFilter =
+  | 'all'
+  | 'priority'
+  | 'alarms'
+  | 'none'
+  | 'unknown'
+  | 'not_applicable';
+
+/** Android notification channel importance (`NotificationManager.IMPORTANCE_*`). */
+export type ChannelImportance =
+  | 'none'
+  | 'min'
+  | 'low'
+  | 'default'
+  | 'high'
+  | 'max'
+  | 'unspecified';
+
+/**
+ * Android channel lock-screen visibility (`Notification.VISIBILITY_*`). `no_override`:
+ * the channel does not override it, so each notification's own visibility applies
+ * (subject to the device's lock-screen setting).
+ */
+export type LockscreenVisibility = 'public' | 'private' | 'secret' | 'no_override' | 'unknown';
+
+/** One of the app's Android notification channels — every channel, not only the call channel. */
+export interface NotificationChannelInfo {
+  id: string;
+  /** User-visible channel name. */
+  name: string;
+  importance: ChannelImportance;
+  /** Importance `none` (the user switched the channel off) or its channel group is blocked. */
+  blocked: boolean;
+  /** The channel has a sound. */
+  sound: boolean;
+  /** The channel vibrates. */
+  vibration: boolean;
+  /** The channel may override Do Not Disturb (only the user can grant this). */
+  bypassDnd: boolean;
+  lockscreenVisibility: LockscreenVisibility;
+}
+
+/**
+ * Why a process of this app died (`ApplicationExitInfo.REASON_*`, Android 11+).
+ * `user_requested` covers Settings → *Force stop*, OEM "swipe kills" and, on stock
+ * Android, swiping the app out of Recents; `unknown` is `REASON_UNKNOWN` or a value newer
+ * than this library.
+ */
+export type ProcessExitReason =
+  | 'user_requested'
+  | 'user_stopped'
+  | 'crash'
+  | 'crash_native'
+  | 'anr'
+  | 'low_memory'
+  | 'signaled'
+  | 'excessive_resource_usage'
+  | 'dependency_died'
+  | 'permission_change'
+  | 'initialization_failure'
+  | 'freezer'
+  | 'package_state_change'
+  | 'package_updated'
+  | 'exit_self'
+  | 'other'
+  | 'unknown';
+
+/**
+ * Process importance when it died (`RunningAppProcessInfo.IMPORTANCE_*`). `foreground`
+ * includes foreground services; `other` is anything else (e.g. top-sleeping).
+ */
+export type ProcessImportance =
+  | 'foreground'
+  | 'visible'
+  | 'perceptible'
+  | 'service'
+  | 'cached'
+  | 'gone'
+  | 'other';
+
+/** A recorded death of one of the app's processes (Android 11+ `ApplicationExitInfo`). */
+export interface ProcessExitInfo {
+  /** Epoch milliseconds (device clock — compare with `collectedAt`). */
+  timestamp: number;
+  reason: ProcessExitReason;
+  /** Exit status (`exit_self`) or signal number (`signaled`, `crash_native`, …). */
+  status: number;
+  importance: ProcessImportance;
+  /** Free-text detail from the system, e.g. `"remove task"`, `"stop com.example due to …"`. */
+  description: string | null;
+  /** The app's main process has the package name; others have a `:suffix`. */
+  processName: string | null;
+}
+
+/**
+ * Best-effort detection of the manufacturer's Android skin from system properties.
+ * `name` is one of `realme UI`, `ColorOS`, `OxygenOS`, `HyperOS`, `MIUI`, `OriginOS`,
+ * `Funtouch OS`, `MagicOS`, `Magic UI`, `HarmonyOS`, `EMUI`, `One UI`, `Flyme`, or
+ * null when none was recognised (stock Android, Pixel, Motorola, Nokia, …).
+ */
+export interface RomInfo {
+  name: string | null;
+  /** The skin's own version as the device reports it, e.g. `V5.0`, `OS2.0`, `6.1`. */
+  version: string | null;
+  /** Android: `Build.DISPLAY` (the build id). iOS: the OS version and build string. */
+  display: string | null;
+}
+
+export interface TtsInfo {
+  /**
+   * Android: package of the default text-to-speech engine (e.g. `com.google.android.tts`),
+   * null when no engine is installed. iOS: `AVSpeechSynthesizer`.
+   */
+  engine: string | null;
+  /**
+   * The engine's default language (BCP-47). Android: known once the library's speech
+   * engine has been used in this process, or from the system's TTS setting where
+   * readable; null otherwise (the engine then normally follows the device language).
+   * iOS: `AVSpeechSynthesisVoice.currentLanguageCode()`.
+   */
+  defaultLanguage: string | null;
+}
+
+export type IosAuthorizationStatus =
+  | 'not_determined'
+  | 'denied'
+  | 'authorized'
+  | 'provisional'
+  | 'ephemeral'
+  | 'unknown';
+
+/** `UNNotificationSetting`. */
+export type IosNotificationSetting = 'enabled' | 'disabled' | 'not_supported' | 'unknown';
+
+/** `UIApplication.backgroundRefreshStatus`. */
+export type IosBackgroundRefresh = 'available' | 'denied' | 'restricted' | 'unknown';
+
+/** The raw `UNNotificationSettings` of the app. */
+export interface IosNotificationSettings {
+  authorizationStatus: IosAuthorizationStatus;
+  alertSetting: IosNotificationSetting;
+  soundSetting: IosNotificationSetting;
+  lockScreenSetting: IosNotificationSetting;
+  notificationCenterSetting: IosNotificationSetting;
+  timeSensitiveSetting: IosNotificationSetting;
+  criticalAlertSetting: IosNotificationSetting;
+  /** `enabled` when the user moved the app's notifications into the Scheduled Summary. */
+  scheduledDeliverySetting: IosNotificationSetting;
+}
+
+export interface IosDiagnostics {
+  /** Low Power Mode is on. */
+  lowPowerMode: boolean;
+  /** Background App Refresh for this app. */
+  backgroundRefresh: IosBackgroundRefresh;
+  notificationSettings: IosNotificationSettings;
+}
+
+/**
+ * Everything the library can read about why a reminder call might not reach this device.
+ * Every field is best-effort: a value that cannot be read is `unknown` / `null` / `false`
+ * / `[]` instead of failing the call. JSON-serialisable (no `undefined`), so it can be
+ * sent to a backend as is. See README → Diagnostics.
+ */
+export interface CallReminderDiagnostics {
+  platform: 'android' | 'ios';
+  /** Android `Build.VERSION.RELEASE`; iOS `systemVersion`. */
+  osVersion: string;
+  /** Android API level; null on iOS. */
+  sdkInt: number | null;
+  /** Android `Build.MANUFACTURER`, lower-cased (e.g. `realme`, `xiaomi`); `apple` on iOS. */
+  manufacturer: string;
+  /** Android `Build.BRAND`, lower-cased (e.g. `realme`, `redmi`, `poco`); `apple` on iOS. */
+  brand: string;
+  /** Android `Build.MODEL` (e.g. `RMX3686`); iOS model identifier (e.g. `iPhone15,2`). */
+  model: string;
+  /** Android `Build.DEVICE` (code name); iOS `UIDevice.model` (`iPhone`, `iPad`). */
+  device: string;
+  rom: RomInfo;
+  /** The same object `getPermissions()` resolves with. */
+  permissions: CallReminderPermissions;
+  standbyBucket: StandbyBucket;
+  /** Android Battery Saver; iOS Low Power Mode. */
+  powerSaveMode: boolean;
+  /** Android: the device is in Doze right now (false while the app is in use). iOS: false. */
+  deviceIdle: boolean;
+  interruptionFilter: InterruptionFilter;
+  /**
+   * Android: whether Do Not Disturb lets alarms through (`PRIORITY_CATEGORY_ALARMS`) —
+   * the policy in force while DND is on in priority mode (Android 11+: of all active
+   * modes), otherwise the user's DND settings, i.e. what happens once DND turns on.
+   * Android 7–8: always true (priority mode always allowed alarms). Android ignores it
+   * for `interruptionFilter` `none` (alarms silenced) and `alarms` (alarms allowed).
+   * null when it could not be read, and on iOS.
+   */
+  dndAllowsAlarms: boolean | null;
+  /** Android 8+: all of the app's channels. Empty below Android 8 and on iOS. */
+  notificationChannels: NotificationChannelInfo[];
+  /** The app-wide notifications switch (Android) / authorization (iOS). */
+  appNotificationsEnabled: boolean;
+  /** Android 11+: the app's latest process deaths, newest first, at most 10. Empty elsewhere. */
+  exitReasons: ProcessExitInfo[];
+  /**
+   * Android: the app was force-stopped before the current process started — while it
+   * was, pushes (FCM) were not delivered and nothing could ring. Android 15+: exact
+   * (`ApplicationStartInfo.wasForceStopped()`; the first launch after installing, when an
+   * app is also "stopped", does not count). Android 11–14: inferred — the newest exit
+   * of the main process is `user_requested` / `user_stopped`, which is also what a
+   * stock-Android swipe out of Recents looks like (harmless there). Either way a
+   * deliberate Settings → *Force stop* looks the same as an OEM swipe kill. False below
+   * Android 11 and on iOS.
+   */
+  forceStoppedRecently: boolean;
+  /** A PIN, pattern, password (Android) or passcode (iOS) is set. */
+  keyguardSecure: boolean;
+  tts: TtsInfo;
+  /** IANA time zone id, e.g. `Asia/Kolkata`. */
+  timezone: string;
+  /** Device locale as a BCP-47 tag, e.g. `en-IN`. */
+  locale: string;
+  /** iOS-only details; null on Android. */
+  ios: IosDiagnostics | null;
+  /** Epoch milliseconds when this snapshot was taken (device clock). */
+  collectedAt: number;
+}
+
 export type CallActionStyle = 'primary' | 'secondary' | 'destructive';
 
 /** A button offered on the call screen after the call has been answered. */
@@ -125,6 +382,18 @@ export interface CallReminderLabels {
  * The notification's Answer/Decline actions are system buttons and unaffected.
  */
 export type AnswerGesture = 'swipe' | 'tap';
+
+/**
+ * Android template of the ringing notification.
+ * - `call` (default): Android's call-style template — Answer/Decline pills, ranked
+ *   at the top of the shade and, from Android 14, the only kind of ongoing
+ *   notification the user can't swipe away (none can be removed with "Clear
+ *   all"). Falls back to `standard` automatically if a device rejects it.
+ * - `standard`: a plain notification with Answer/Decline actions. Ongoing too, but
+ *   Android 14+ lets the user swipe it away (reported as `declined` / `dismissed`).
+ * iOS notifications can always be dismissed; this has no effect there.
+ */
+export type RingingStyle = 'call' | 'standard';
 
 export interface CallReminderIosConfig {
   /** Notification category registered for call reminders (default `CALL_REMINDER`). */
@@ -211,6 +480,8 @@ export interface CallReminderConfig {
   labels?: Partial<CallReminderLabels>;
   /** Answer/Decline on the ringing call screen (default `swipe`). */
   answerGesture?: AnswerGesture;
+  /** Android ringing notification template (default `call`, which can't be swiped away). */
+  ringingStyle?: RingingStyle;
   /** Actions shown after answering when a call does not specify its own. */
   defaultActions?: CallAction[];
   /** Android audio usage for the ring: `alarm` (default), `ringtone` or `notification`. */

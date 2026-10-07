@@ -90,6 +90,11 @@ RCT_EXPORT_MODULE()
   [CallReminderCore.shared getPermissions:resolve];
 }
 
+- (void)getDiagnostics:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
+{
+  [CallReminderCore.shared getDiagnostics:resolve];
+}
+
 - (void)requestNotificationPermission:(BOOL)criticalAlerts
                               resolve:(RCTPromiseResolveBlock)resolve
                                reject:(RCTPromiseRejectBlock)reject

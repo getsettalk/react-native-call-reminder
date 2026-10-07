@@ -41,12 +41,52 @@ const permissions = () => ({
   allRequiredGranted: true,
 });
 
+// A healthy Pixel on Android 15: everything that could stop a call is fine.
+const diagnostics = () => ({
+  platform: 'android',
+  osVersion: '15',
+  sdkInt: 35,
+  manufacturer: 'google',
+  brand: 'google',
+  model: 'Pixel 8',
+  device: 'shiba',
+  rom: { name: null, version: null, display: 'AP4A.250205.002' },
+  permissions: permissions(),
+  standbyBucket: 'active',
+  powerSaveMode: false,
+  deviceIdle: false,
+  interruptionFilter: 'all',
+  dndAllowsAlarms: true,
+  notificationChannels: [
+    {
+      id: 'call_reminder_incoming',
+      name: 'Reminder calls',
+      importance: 'high',
+      blocked: false,
+      sound: true,
+      vibration: true,
+      bypassDnd: false,
+      lockscreenVisibility: 'public',
+    },
+  ],
+  appNotificationsEnabled: true,
+  exitReasons: [],
+  forceStoppedRecently: false,
+  keyguardSecure: true,
+  tts: { engine: 'com.google.android.tts', defaultLanguage: 'en-US' },
+  timezone: 'Asia/Kolkata',
+  locale: 'en-IN',
+  ios: null,
+  collectedAt: 1767225600000,
+});
+
 const resolved = value => jest.fn(() => Promise.resolve(value));
 
 const CallReminder = {
   HEADLESS_TASK_NAME,
   configure: resolved(undefined),
   getPermissions: jest.fn(() => Promise.resolve(permissions())),
+  getDiagnostics: jest.fn(() => Promise.resolve(diagnostics())),
   requestNotificationPermission: resolved('granted'),
   requestFullScreenIntentPermission: resolved('granted'),
   openExactAlarmSettings: resolved('granted'),

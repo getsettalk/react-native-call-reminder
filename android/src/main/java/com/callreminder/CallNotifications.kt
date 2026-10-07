@@ -14,6 +14,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import androidx.core.content.ContextCompat
 
 /** Intents shared by notifications, the call screen and the timeout alarm. */
@@ -164,6 +166,24 @@ internal object CallNotifications {
    * for notifications that asked for full screen.
    */
   fun postRinging(context: Context, config: CallReminderConfig, record: CallRecord): Boolean {
+    if (config.ringingStyle == RingingStyle.CALL) {
+      // Some OEM builds reject a call-style notification they don't like; a
+      // reminder must still ring, so fall back to the standard template.
+      try {
+        return post(context, record.call.callId, buildRinging(context, config, record, callStyle = true))
+      } catch (e: RuntimeException) {
+        Log.w(TAG, "Call-style notification rejected, falling back to standard", e)
+      }
+    }
+    return post(context, record.call.callId, buildRinging(context, config, record, callStyle = false))
+  }
+
+  private fun buildRinging(
+      context: Context,
+      config: CallReminderConfig,
+      record: CallRecord,
+      callStyle: Boolean,
+  ): Notification {
     val call = record.call
     val channelId = ensureChannel(context, config, call.ringtone)
     val builder =
@@ -172,14 +192,29 @@ internal object CallNotifications {
             .setOngoing(true)
             .setAutoCancel(false)
             .setDeleteIntent(CallIntents.dismissed(context, call.callId))
-            .addAction(
-                R.drawable.callreminder_ic_call_end,
-                config.label(context, Label.DECLINE),
-                CallIntents.decline(context, call.callId))
-            .addAction(
-                R.drawable.callreminder_ic_call,
-                config.label(context, Label.ANSWER),
-                CallIntents.answer(context, call.callId))
+    if (callStyle) {
+      // Answer/Decline come from the template (green/red pills); the caller is the app.
+      val caller =
+          Person.Builder()
+              .setName(call.callerName)
+              .setImportant(true)
+              .apply { CallResources.avatar(context, config, call)?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+              .build()
+      builder.setStyle(
+          NotificationCompat.CallStyle.forIncomingCall(
+                  caller, CallIntents.decline(context, call.callId), CallIntents.answer(context, call.callId))
+              .setVerificationText(call.title))
+    } else {
+      builder
+          .addAction(
+              R.drawable.callreminder_ic_call_end,
+              config.label(context, Label.DECLINE),
+              CallIntents.decline(context, call.callId))
+          .addAction(
+              R.drawable.callreminder_ic_call,
+              config.label(context, Label.ANSWER),
+              CallIntents.answer(context, call.callId))
+    }
 
     val remaining = record.deadlineAt - System.currentTimeMillis()
     if (remaining > 0) {
@@ -197,7 +232,9 @@ internal object CallNotifications {
       // Repeat sound + vibration until answered, declined or timed out.
       notification.flags = notification.flags or Notification.FLAG_INSISTENT
     }
-    return post(context, call.callId, notification)
+    // Not removable with "Clear all" on any Android version.
+    notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
+    return notification
   }
 
   /**
